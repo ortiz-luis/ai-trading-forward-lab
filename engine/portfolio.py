@@ -44,8 +44,13 @@ class PortfolioState:
 
     @property
     def equity_eur(self) -> float:
-        # Until mark-to-market prices arrive in a later gate, equity is carried at cost.
+        # Until market marks arrive in a later gate, positions are carried at cost.
         return self.cash_eur + self.exposure_eur
+
+    @property
+    def unrealized_pnl_eur(self) -> float:
+        # Explicitly zero at cost-basis accounting stage; mark-to-market arrives later.
+        return self.equity_eur - self.starting_capital_eur - self.realized_pnl_eur
 
     @classmethod
     def initial(cls, starting_capital_eur: float) -> "PortfolioState":
@@ -75,6 +80,7 @@ class PortfolioState:
             "equity_eur": self.equity_eur,
             "exposure_eur": self.exposure_eur,
             "realized_pnl_eur": self.realized_pnl_eur,
+            "unrealized_pnl_eur": self.unrealized_pnl_eur,
             "positions": {
                 symbol: asdict(position)
                 for symbol, position in sorted(self.positions.items())
