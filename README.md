@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 80% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 90%.**
+> **Current progress: 90% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 100%.**
 
 ## Product goal
 
@@ -78,34 +78,33 @@ A block is complete only when its acceptance criteria pass.
 - [x] Explicit `DATA_ERROR`, `AI_ERROR`, `DEPLOY_ERROR` event infrastructure and `health.json`.
 - [x] Prior successful timestamps remain intact after later failures.
 - [x] Synthetic tests cover same-session idempotency, missing secrets, repeated evaluation, health-state persistence and multi-day injected failures.
-- [x] Package discovery corrected so `engine.*` subpackages install consistently in fresh Actions environments.
-- [x] Automation/failure semantics documented in `docs/AUTOMATION_AND_RESILIENCE.md`.
 
 ## 70% → 80% — Public-data layer + beginner-first UI ✅
-- [x] Deterministic `engine/public_data.py` builder creates a sanitized dashboard payload from ledger/evaluations/health.
-- [x] Public JSON exposes only UI-safe fields; locked hashes, source hashes, raw headers, environment values and credentials are excluded.
-- [x] Secret-pattern scan fails closed before writing a publishable artifact.
-- [x] Public payload includes starting/current capital, cumulative P&L, counts, latest decision, open positions, equity series, recent history, “Mientras no estuviste”, health summary and secondary advanced metrics.
-- [x] Safe empty-state `data/public/dashboard.json` clearly represents a not-yet-started €1,000 simulation.
-- [x] Responsive beginner-first UI added under `app/` with hero capital cards, latest decision, simple win/loss/no-trade counts, cumulative equity chart, positions and recent history.
-- [x] Advanced metrics are secondary/collapsible and do not dominate the first view.
-- [x] UI reads only the public dashboard artifact and does not read ledgers, secrets or runtime environment.
-- [x] Tests cover normal public build, empty state, whitelist-only health fields and secret-pattern rejection.
+- [x] Deterministic sanitized dashboard payload from ledger/evaluations/health.
+- [x] Strict public whitelist and secret-pattern scan.
+- [x] Starting/current capital, cumulative P&L, counts, latest decision, positions, equity series, recent history and “Mientras no estuviste”.
+- [x] Safe pre-cohort empty state with €1,000 simulated capital and zero fake results.
+- [x] Responsive beginner-first UI with technical metrics secondary/collapsible.
+- [x] UI reads only the public dashboard artifact.
 
-**Acceptance:** publishable artifacts contain the information needed for the dashboard while excluding secret/internal fields. Before the official cohort starts, the UI truthfully shows €1,000 starting/current simulated capital and zero decisions instead of fake demo performance. The page layout is intentionally understandable from the first screen without requiring technical metrics.
+## 80% → 90% — Pages deployment + optional Alpaca Paper shadow ✅
+- [x] Official Pages workflow added: `configure-pages@v5` → `upload-pages-artifact@v4` → `deploy-pages@v4`.
+- [x] Pages artifact assembled at project root so relative assets/data work under `/ai-trading-forward-lab/`.
+- [x] Public UI uses `./data/dashboard.json`, avoiding repository-root/base-path assumptions.
+- [x] Authorized manual “request a decision now” is exposed as a link to the authenticated GitHub Actions workflow rather than an unauthenticated browser API endpoint.
+- [x] Health/status area includes safe update state and responsive mobile layout below 760 px.
+- [x] Optional `AlpacaPaperShadow` implemented with separate paper-only credentials.
+- [x] Live Alpaca base URL and every non-paper base URL are hard-blocked.
+- [x] `NO_TRADE`/`HOLD` create no paper request; BUY uses a stable client order id; SELL mirrors v1 full-position close semantics.
+- [x] Paper fills can be reconciled but never overwrite the immutable internal ledger or evaluator truth.
+- [x] Tests cover paper-only endpoint enforcement, no-request paths, BUY idempotency metadata and SELL close mirroring.
+- [x] Deployment/paper safety documented in `docs/PAGES_AND_PAPER_SHADOW.md`.
 
-## 80% → 90% — Pages deployment + optional Alpaca Paper shadow
-- [ ] Official Pages deployment and correct project base path.
-- [ ] Authorized manual “request a decision now”.
-- [ ] Health/update status, mobile/desktop and HTTPS validation.
-- [ ] Optional Alpaca paper-only broker adapter.
-- [ ] Mirror eligible simulated decisions and reconcile paper fills.
-- [ ] Never overwrite internal ledger; hard-block live endpoint/credentials.
-
-**Acceptance:** public site works without exposing credentials; Alpaca Paper can be disabled entirely and internal truth remains reproducible.
+**Acceptance:** the repository now contains the production Pages deployment path, project-base-safe UI and a strictly optional paper-only shadow adapter whose outputs cannot become internal truth. This execution environment could not resolve `github.io`, so external live HTTPS reachability is deliberately rechecked in the final 90% → 100% hardening gate rather than falsely claimed here.
 
 ## 90% → 100% — Hardening, freeze and forward cohort v1
 - [ ] Secret scan, failure injection, rebuild-from-zero and duplicate schedule test.
+- [ ] Verify Pages workflow run, public HTTPS URL and dashboard asset loading.
 - [ ] Dependency/recovery policy.
 - [ ] Freeze cohort prompt/protocol/provider/model/evidence settings and create checkpoint tag.
 - [ ] Initialize official simulated €1,000 cohort.
@@ -130,4 +129,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**80% complete.** The project now has a safe public-data contract plus a responsive beginner-first dashboard that can already render the truthful pre-cohort empty state. Next block is **80% → 90%: Pages deployment + optional Alpaca Paper shadow**.
+**90% complete.** The public dashboard now has an official Pages deployment workflow, project-safe relative paths, an authenticated manual trigger path, visible health state and responsive layout. An optional Alpaca Paper shadow is isolated behind paper-only credentials/endpoints and cannot rewrite internal truth. Next block is **90% → 100%: hardening, freeze and start of forward cohort v1**.
