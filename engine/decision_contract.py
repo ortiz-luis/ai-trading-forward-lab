@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .protocol import PROTOCOL_V1
 from .schemas import Action
+from .protocol import PROTOCOL_V1
 
 PROMPT_VERSION = "trading-v1"
 
@@ -54,7 +54,6 @@ class DecisionInput:
     protocol: dict[str, Any]
     market: dict[str, Any]
     evidence: list[dict[str, Any]]
-    model_identifier: str
 
 
 @dataclass(frozen=True)
@@ -101,32 +100,33 @@ class DecisionOutput:
             if not isinstance(source["url"], str) or not source["url"].strip():
                 raise ValueError("source url is required")
 
-        if self.action == Action.BUY:
-            if self.symbol not in PROTOCOL_V1.tradable_universe:
-                raise ValueError("BUY symbol outside protocol universe")
-            if self.notional_eur <= 0:
-                raise ValueError("BUY requires positive notional")
-            if not PROTOCOL_V1.min_horizon_days <= self.horizon_days <= PROTOCOL_V1.max_horizon_days:
-                raise ValueError("BUY horizon outside protocol bounds")
-            if self.stop_pct is None or not PROTOCOL_V1.max_stop_pct <= self.stop_pct <= PROTOCOL_V1.min_stop_pct:
-                raise ValueError("BUY stop outside protocol bounds")
-        elif self.action in {Action.HOLD, Action.SELL}:
-            if self.symbol not in PROTOCOL_V1.tradable_universe:
-                raise ValueError("symbol outside protocol universe")
-            if self.notional_eur != 0:
-                raise ValueError("HOLD/SELL must use zero notional")
-            if self.stop_pct is not None or self.horizon_days != 0:
-                raise ValueError("HOLD/SELL use no new stop or horizon")
-        elif self.action == Action.NO_TRADE:
-            if self.symbol is not None or self.notional_eur != 0 or self.stop_pct is not None or self.horizon_days != 0:
-                raise ValueError("NO_TRADE must not allocate or specify a position")
+        # Convert the structured response into the same immutable event-level
+        # constraints enforced elsewhere. Equity is fixed at the cohort default
+        # here; the runtime pipeline will supply current equity before locking.
+        from .schemas import DecisionEvent
+        event = DecisionEvent(
+            decision_id="contract-validation",
+            idempotency_key="contract-validation",
+            decision_at="2026-01-01T00:00:00Z",
+            cutoff_at="2026-01-01T00:00:00Z",
+            action=self.action,
+            symbol=self.symbol,
+            notional_eur=self.notional_eur,
+            confidence=self.confidence,
+            horizon_days=self.horizon_days,
+            stop_pct=self.stop_pct,
+            thesis=self.thesis,
+            counter_thesis=self.counter_thesis,
+            prompt_version=PROMPT_VERSION,
+            model="contract-validation",
+            sources_hash="contract-validation",
+        )
+        PROTOCOL_V1.validate_decision(event, current_equity_eur=PROTOCOL_V1.starting_capital_eur)
 
 
 def build_prompt_input(input_data: DecisionInput) -> dict[str, Any]:
     if not input_data.cutoff_at:
         raise ValueError("cutoff_at is required")
-    if not input_data.model_identifier.strip():
-        raise ValueError("model_identifier is required")
     return {
         "cutoff_at": input_data.cutoff_at,
         "portfolio": input_data.portfolio,
@@ -134,5 +134,4 @@ def build_prompt_input(input_data: DecisionInput) -> dict[str, Any]:
         "market": input_data.market,
         "evidence": input_data.evidence,
         "prompt_version": PROMPT_VERSION,
-        "model_identifier": input_data.model_identifier,
     }
