@@ -6,11 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "ai-trading-forward-lab"
 version = "0.1.0"
 description = "Forward-only simulated trading lab driven by AI decisions"
-requires-python = ">=3.11"
-dependencies = ["openai>=1.0"]
+requires-python = ">=3.11,<3.12"
+dependencies = ["openai==3.8.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest==9.1.1"]
 
 [project.scripts]
 ai-trading-lab = "engine.cli:main"
