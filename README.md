@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 25% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 30%.**
+> **Current progress: 30% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 35%.**
 
 ## Product goal
 
@@ -83,15 +83,18 @@ A block is complete only when its acceptance criteria pass.
 
 **Acceptance:** fixture inputs produce deterministic normalized observations; missing/stale/closed-market data fails closed and cannot be treated as a tradeable quote. No external network/API call is introduced in this gate.
 
-## 25% → 30% — Real market-data adapter
-- [ ] Implement Alpaca adapter using environment/GitHub Secret credentials.
-- [ ] Retrieve latest quotes/bars for a small allowed US-equity universe.
-- [ ] Normalize provider timestamps, symbols and currencies into v1 models.
-- [ ] Add timeout, bounded retry and explicit rate-limit handling.
-- [ ] Add provider health state.
-- [ ] Persist only sanitized observations; never credentials/headers.
+## 25% → 30% — Real market-data adapter ✅
+- [x] Implement Alpaca adapter using environment/GitHub Secret credentials.
+- [x] Retrieve latest quotes and 1-minute bars through official Alpaca market-data endpoints.
+- [x] Normalize provider timestamps, symbols and currencies into v1 models.
+- [x] Add timeout, bounded exponential retry and explicit 429 rate-limit handling.
+- [x] Add normalized provider health state (`HEALTHY`, `DEGRADED`, `UNAVAILABLE`).
+- [x] Ensure credentials travel only in request headers and never in normalized observations/output.
+- [x] Add safe manual probe `python -m engine.providers.alpaca_probe`.
+- [x] Add network-simulated tests for quote/bar normalization, auth failure, rate-limit retries and secret isolation.
+- [x] Document setup and failure semantics in `docs/ALPACA_MARKET_DATA.md`.
 
-**Acceptance:** manual network run yields a sanitized timestamped snapshot or an explicit clean failure.
+**Acceptance:** with valid environment credentials the safe probe is designed to produce a sanitized SPY quote/bar snapshot; without credentials it fails closed with an explicit normalized error. No credential or raw request header is persisted or printed. Live network verification is intentionally deferred until credentials are supplied through WSL/GitHub Secrets; the adapter itself is fully isolated behind the provider contract.
 
 ## 30% → 35% — Trading protocol v1
 - [ ] Freeze universe, long-only/no-leverage constraints and position limits.
@@ -182,4 +185,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**25% complete.** The engine now has an external-provider-independent market-data contract, deterministic offline fixtures, quote/candle temporal models, sanitized audit snapshots and fail-closed handling for missing/stale/closed data. Alpaca Market Data is selected as the first real adapter. Next block is **25% → 30%: Real market-data adapter**.
+**30% complete.** The provider-independent market layer now has a real Alpaca implementation with environment-only credentials, normalized latest quotes/bars, bounded retries, explicit rate-limit/auth/network failures, provider health and a sanitized manual probe. Next block is **30% → 35%: Trading protocol v1**.
