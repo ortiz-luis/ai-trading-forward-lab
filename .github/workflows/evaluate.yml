@@ -1,0 +1,56 @@
+name: Periodic simulated evaluation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '47 * * * 1-5'
+      timezone: 'Europe/Paris'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ai-trading-state
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
+
+      - name: Test before evaluation cycle
+        run: python -m pytest
+
+      - name: Run guarded evaluation cycle
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        run: python -m engine.automation_runner evaluate
+
+      - name: Test state after cycle
+        run: python -m pytest
+
+      - name: Persist sanitized state
+        run: |
+          if git diff --quiet -- data/; then
+            echo 'No state changes to persist.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/
+          git commit -m 'chore: persist automated evaluation state'
+          git pull --rebase origin main
+          git push origin HEAD:main
