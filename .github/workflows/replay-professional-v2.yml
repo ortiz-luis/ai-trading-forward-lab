@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'engine/replay_professional.py'
+      - 'engine/replay_professional_runner.py'
       - 'prompts/replay_professional_v2.md'
       - 'tests/test_replay_professional.py'
       - '.github/workflows/replay-professional-v2.yml'
@@ -42,7 +43,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
-        run: python -m engine.replay_professional
+        run: python -m engine.replay_professional_runner
 
       - name: Assert forward state stayed untouched
         run: |
