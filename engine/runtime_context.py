@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from typing import Callable, Sequence
 
+from .effective_portfolio import rebuild_effective_portfolio_from_ledgers
 from .evidence import EvidenceKind, EvidenceRecord, build_evidence_context, write_evidence_manifest
-from .portfolio import PortfolioState, rebuild_portfolio_from_ledger
 from .protocol import PROTOCOL_V1
 from .providers.alpaca import AlpacaMarketDataProvider
 from .providers.market import MarketDataProvider, require_tradeable_quote
@@ -23,19 +23,23 @@ def utc_iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _portfolio_payload(decisions_path: Path, starting_capital_eur: float) -> dict[str, object]:
-    if decisions_path.exists():
-        return rebuild_portfolio_from_ledger(
-            decisions_path,
-            starting_capital_eur=starting_capital_eur,
-        ).to_dict()
-    return PortfolioState.initial(starting_capital_eur).to_dict()
+def _portfolio_payload(
+    decisions_path: Path,
+    evaluations_path: Path,
+    starting_capital_eur: float,
+) -> dict[str, object]:
+    return rebuild_effective_portfolio_from_ledgers(
+        decisions_path,
+        evaluations_path,
+        starting_capital_eur=starting_capital_eur,
+    ).to_dict()
 
 
 def build_runtime_context(
     *,
     provider: MarketDataProvider,
     decisions_path: str | Path = "data/decisions.jsonl",
+    evaluations_path: str | Path = "data/evaluations.jsonl",
     output_path: str | Path = "data/runtime_context.json",
     evidence_manifest_path: str | Path = "data/evidence_manifest.json",
     symbols: Sequence[str] | None = None,
@@ -78,8 +82,6 @@ def build_runtime_context(
     cutoff_at = utc_iso(cutoff_dt)
     for symbol in requested:
         quote_payload = market[symbol]
-        # Reconstruct only the fields needed by the tradeability guard from the
-        # already-normalized provider observation; no second network request.
         from .providers.market import MarketQuote
         quote = MarketQuote(
             symbol=symbol,
@@ -122,7 +124,9 @@ def build_runtime_context(
 
     payload = {
         "cutoff_at": cutoff_at,
-        "portfolio": _portfolio_payload(Path(decisions_path), PROTOCOL_V1.starting_capital_eur),
+        "portfolio": _portfolio_payload(
+            Path(decisions_path), Path(evaluations_path), PROTOCOL_V1.starting_capital_eur
+        ),
         "protocol": asdict(PROTOCOL_V1),
         "market": market,
         "evidence": [row.to_dict() for row in evidence],
