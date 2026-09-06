@@ -1,17 +1,25 @@
-const eur = value => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(value ?? 0);
-const num = value => new Intl.NumberFormat('es-ES',{maximumFractionDigits:4}).format(value ?? 0);
-const pct = value => `${(value ?? 0).toFixed(2)}%`;
-const dateFmt = value => value ? new Intl.DateTimeFormat('es-ES',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : '—';
-const dayFmt = value => value ? new Intl.DateTimeFormat('es-ES',{dateStyle:'medium'}).format(new Date(`${value}T12:00:00Z`)) : '—';
-
-function setText(id, value){ const el=document.getElementById(id); if(el) el.textContent=value; }
-function pnlClass(value){ return value>0?'positive':value<0?'negative':'neutral'; }
-function unlock(id){ const el=document.getElementById(id); if(el){el.classList.remove('locked-step');el.classList.add('unlocked-step');} }
+const eur=value=>new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(value??0);
+const usd=value=>value==null?'—':`$${new Intl.NumberFormat('es-ES',{maximumFractionDigits:2}).format(value)}`;
+const pct=value=>value==null?'—':`${Number(value).toFixed(2)}%`;
+const dayFmt=value=>value?new Intl.DateTimeFormat('es-ES',{dateStyle:'medium'}).format(new Date(`${value}T12:00:00Z`)):'—';
+const dateFmt=value=>value?new Intl.DateTimeFormat('es-ES',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'—';
+const esc=value=>String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const setText=(id,value)=>{const el=document.getElementById(id);if(el)el.textContent=value;};
+const pnlClass=value=>value>0?'positive':value<0?'negative':'neutral';
+const unlock=id=>{const el=document.getElementById(id);if(el)el.classList.remove('locked-step');};
 
 let replayData=null;
 let currentReplay=null;
-let replayRange='1M';
-let replayStage=0;
+let visibleRange='1M';
+let scanned=false;
+let asked=false;
+let applied=false;
+let revealed=false;
+let followVisible=0;
+let proChart=null;
+let candleSeries=null;
+let volumeSeries=null;
+let smaSeries=[];
 
 function switchMode(mode){
   const replay=mode==='replay';
@@ -24,196 +32,270 @@ function switchMode(mode){
 document.getElementById('replayModeButton').addEventListener('click',()=>switchMode('replay'));
 document.getElementById('liveModeButton').addEventListener('click',()=>switchMode('live'));
 
-function drawLineChart(svgId, points, {futurePoints=[]}={}){
-  const svg=document.getElementById(svgId);
-  if(!svg || !points?.length){ if(svg) svg.innerHTML=''; return; }
-  const all=[...points,...futurePoints];
-  const values=all.map(p=>p.value);
-  const min=Math.min(...values), max=Math.max(...values);
-  const span=Math.max(max-min,0.0001);
-  const xFor=i=>all.length===1?400:(i/(all.length-1))*760+20;
-  const yFor=v=>235-((v-min)/span)*190;
-  const pastPts=points.map((p,i)=>`${xFor(i)},${yFor(p.value)}`).join(' ');
-  let html=`<line x1="20" y1="235" x2="780" y2="235" stroke="currentColor" opacity=".10"/><polyline points="${pastPts}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/>`;
-  if(futurePoints.length){
-    const joined=[points[points.length-1],...futurePoints];
-    const offset=points.length-1;
-    const futPts=joined.map((p,j)=>`${xFor(offset+j)},${yFor(p.value)}`).join(' ');
-    html+=`<polyline points="${futPts}" fill="none" stroke="#b42318" stroke-width="4" vector-effect="non-scaling-stroke"/>`;
+function destroyProfessionalChart(){
+  if(proChart){proChart.remove();proChart=null;candleSeries=null;volumeSeries=null;smaSeries=[];}
+  const host=document.getElementById('professionalChart');
+  if(host)host.innerHTML='';
+}
+
+function smaData(rows,period){
+  const out=[];let sum=0;
+  rows.forEach((row,i)=>{
+    sum+=row.close;
+    if(i>=period)sum-=rows[i-period].close;
+    if(i>=period-1)out.push({time:row.date,value:sum/period});
+  });
+  return out;
+}
+
+function chartRows(){
+  if(!currentReplay)return[];
+  const c=currentReplay.chart||{};
+  const before=(c.candles_before_cutoff?.length?c.candles_before_cutoff:c.spy_before_cutoff)||[];
+  const after=revealed?((c.candles_after_cutoff?.length?c.candles_after_cutoff:c.spy_after_cutoff)||[]):[];
+  return {before,after,all:[...before,...after]};
+}
+
+function rangeSessions(){return {'1W':5,'1M':22,'3M':66,'1Y':252,'2Y':520}[visibleRange]||22;}
+
+function renderProfessionalChart(){
+  if(!currentReplay||!scanned)return;
+  const host=document.getElementById('professionalChart');
+  if(!host)return;
+  destroyProfessionalChart();
+  const {before,after,all}=chartRows();
+  if(!all.length){host.innerHTML='<div class="small-muted" style="padding:20px">No hay velas disponibles para este replay.</div>';return;}
+  if(!window.LightweightCharts){host.innerHTML='<div class="small-muted" style="padding:20px">No se pudo cargar el motor de gráficos.</div>';return;}
+
+  proChart=LightweightCharts.createChart(host,{
+    width:host.clientWidth,
+    height:host.clientHeight,
+    layout:{background:{color:'#ffffff'},textColor:'#596673'},
+    grid:{vertLines:{color:'#f1f3f5'},horzLines:{color:'#f1f3f5'}},
+    rightPriceScale:{borderColor:'#e5e9ed'},
+    timeScale:{borderColor:'#e5e9ed',timeVisible:false,rightOffset:2},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+  });
+  candleSeries=proChart.addCandlestickSeries({
+    upColor:'#18794e',downColor:'#b42318',borderVisible:false,wickUpColor:'#18794e',wickDownColor:'#b42318',
+    priceScaleId:'right',
+  });
+  candleSeries.setData(all.map(r=>({time:r.date,open:r.open,high:r.high,low:r.low,close:r.close})));
+  volumeSeries=proChart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'volume',scaleMargins:{top:0.80,bottom:0}});
+  volumeSeries.setData(all.map(r=>({time:r.date,value:r.volume,color:r.close>=r.open?'rgba(24,121,78,.32)':'rgba(180,35,24,.28)'})));
+  proChart.priceScale('volume').applyOptions({scaleMargins:{top:.82,bottom:0}});
+
+  [20,50,200].forEach(period=>{
+    const data=smaData(before,period);
+    if(!data.length)return;
+    const line=proChart.addLineSeries({lineWidth:1,lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false});
+    line.setData(data);
+    smaSeries.push(line);
+  });
+
+  const o=currentReplay.chart?.overlays||{};
+  const lines=[];
+  (o.support_levels||[]).forEach((price,i)=>lines.push({price,color:'#18794e',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:`Soporte ${i+1}`}));
+  (o.resistance_levels||[]).forEach((price,i)=>lines.push({price,color:'#b42318',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:`Resistencia ${i+1}`}));
+  if(o.target_price)lines.push({price:o.target_price,color:'#344054',lineWidth:1,lineStyle:1,axisLabelVisible:true,title:'Objetivo'});
+  if(applied&&currentReplay.result?.entry_price)lines.push({price:currentReplay.result.entry_price,color:'#17202a',lineWidth:2,lineStyle:0,axisLabelVisible:true,title:'Entrada'});
+  lines.forEach(line=>candleSeries.createPriceLine(line));
+
+  const markers=[];
+  if(before.length)markers.push({time:before[before.length-1].date,position:'aboveBar',color:'#7a5b00',shape:'circle',text:'Cutoff'});
+  if(applied&&currentReplay.result?.entry_day)markers.push({time:currentReplay.result.entry_day,position:'belowBar',color:'#17202a',shape:'arrowUp',text:'Entrada'});
+  if(revealed&&currentReplay.result?.exit_day)markers.push({time:currentReplay.result.exit_day,position:'aboveBar',color:'#17202a',shape:'arrowDown',text:'Salida'});
+  if(revealed){
+    (currentReplay.lifecycle||[]).forEach(row=>markers.push({time:row.date,position:row.action==='SELL'?'aboveBar':'belowBar',color:row.action==='SELL'?'#b42318':'#65717d',shape:row.action==='SELL'?'arrowDown':'circle',text:row.action}));
   }
-  const labels=[all[0],all[all.length-1]];
-  html+=labels.map((p,idx)=>`<text x="${idx?780:20}" y="255" text-anchor="${idx?'end':'start'}" font-size="11" fill="currentColor" opacity=".55">${p.label}</text>`).join('');
-  svg.innerHTML=html;
+  candleSeries.setMarkers(markers.filter(m=>all.some(r=>r.date===m.time)));
+
+  const n=rangeSessions();
+  const from=Math.max(0,all.length-n);
+  proChart.timeScale().setVisibleLogicalRange({from,to:all.length+1});
+  setText('chartRevealState',revealed?'Futuro revelado · velas posteriores visibles':'Sólo datos conocidos al cutoff');
+  const symbol=currentReplay.chart?.symbol||'SPY';
+  setText('professionalChartTitle',`${symbol} · velas diarias hasta ${dayFmt(currentReplay.cutoff_date)}`);
+  const scope=currentReplay.analysis_scope||{};
+  setText('chartContextNote',`Vista ${visibleRange}; la IA analizó ${scope.daily_history_target||'histórico amplio'} y horizontes ${(scope.technical_horizons||[]).join(' / ')}.`);
+
+  const levels=[];
+  if(o.sma20)levels.push(`SMA20 ${usd(o.sma20)}`);
+  if(o.sma50)levels.push(`SMA50 ${usd(o.sma50)}`);
+  if(o.sma200)levels.push(`SMA200 ${usd(o.sma200)}`);
+  (o.support_levels||[]).forEach(v=>levels.push(`Soporte ${usd(v)}`));
+  (o.resistance_levels||[]).forEach(v=>levels.push(`Resistencia ${usd(v)}`));
+  if(o.target_price)levels.push(`Objetivo ${usd(o.target_price)}`);
+  document.getElementById('chartLevels').innerHTML=levels.map(x=>`<span class="level-chip">${esc(x)}</span>`).join('');
 }
 
-function drawEquity(series){
-  const svg=document.getElementById('equityChart');
-  if(!svg || !series?.length){ if(svg) svg.innerHTML=''; return; }
-  const values=series.map(p=>p.equity_eur);
-  const min=Math.min(...values), max=Math.max(...values);
-  const span=Math.max(max-min,1);
-  const coords=series.map((p,i)=>({...p,x:series.length===1?400:(i/(series.length-1))*780+10,y:240-((p.equity_eur-min)/span)*210}));
-  const pre=coords.filter(p=>p.phase==='PREHISTORY');
-  const fwd=coords.filter(p=>p.phase==='FORWARD');
-  const prePts=pre.map(p=>`${p.x},${p.y}`).join(' ');
-  const joinedFwd=(fwd.length && pre.length ? [pre[pre.length-1],...fwd] : fwd).map(p=>`${p.x},${p.y}`).join(' ');
-  const boundary=fwd.length ? fwd[0].x : null;
-  svg.innerHTML=`<line x1="10" y1="240" x2="790" y2="240" stroke="currentColor" opacity=".12"/>${pre.length>1?`<polyline points="${prePts}" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="9 9" opacity=".35" vector-effect="non-scaling-stroke"/>`:''}${joinedFwd?`<polyline points="${joinedFwd}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/>`:''}${boundary!==null?`<line x1="${boundary}" y1="18" x2="${boundary}" y2="245" stroke="currentColor" stroke-width="2" stroke-dasharray="4 6" opacity=".45"/><text x="${Math.min(boundary+8,650)}" y="28" fill="currentColor" opacity=".7" font-size="14">Inicio forward</text>`:`<text x="20" y="28" fill="currentColor" opacity=".65" font-size="14">Prehistoria visual · €1.000, sin decisiones</text>`}`;
+window.addEventListener('resize',()=>{if(proChart){const host=document.getElementById('professionalChart');proChart.applyOptions({width:host.clientWidth,height:host.clientHeight});}});
+
+document.querySelectorAll('[data-range]').forEach(btn=>btn.addEventListener('click',()=>{
+  visibleRange=btn.dataset.range;
+  document.querySelectorAll('[data-range]').forEach(b=>b.classList.toggle('active',b===btn));
+  renderProfessionalChart();
+}));
+
+function resetReplay(){
+  scanned=false;asked=false;applied=false;revealed=false;followVisible=0;
+  ['decisionCard','applyCard','followCard','revealCard'].forEach(id=>document.getElementById(id).classList.add('locked-step'));
+  ['scanResult','decisionShort','applyResult','followResult','revealResult','lessonCard','professionalChartCard'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['askDecision','applyDecision','advanceDay','revealFuture'].forEach(id=>{const el=document.getElementById(id);el.classList.add('hidden');el.disabled=false;});
+  const scan=document.getElementById('scanMarket');scan.disabled=false;scan.textContent='Explorar mercado';
+  destroyProfessionalChart();
 }
 
-function replayChartPoints(){
-  if(!currentReplay) return {past:[],future:[]};
-  const symbol=document.getElementById('replaySymbol').value || 'SPY';
-  let rows=currentReplay.charts?.[symbol] || [];
-  if(replayRange==='1W') rows=rows.slice(-5);
-  const past=rows.map(r=>({label:r.date,value:r.close}));
-  const future=[];
-  const result=currentReplay.result_next_session;
-  if(replayStage>=2 && result?.available && result.action==='BUY' && symbol===currentReplay.decision.symbol && result.entry){
-    future.push({label:`${result.session_date} open`,value:result.raw_open ?? result.entry});
-  }
-  if(replayStage>=3 && result?.available && result.action==='BUY' && symbol===currentReplay.decision.symbol && result.close){
-    future.push({label:`${result.session_date} close`,value:result.close});
-  }
-  return {past,future};
-}
-
-function renderReplayChart(){
-  if(!currentReplay) return;
-  const symbol=document.getElementById('replaySymbol').value || 'SPY';
-  setText('replayChartTitle',`${symbol} · datos disponibles hasta ${dayFmt(currentReplay.cutoff_date)}`);
-  setText('replayCutoff',`Cutoff ${dateFmt(currentReplay.cutoff_at)}`);
-  const {past,future}=replayChartPoints();
-  drawLineChart('replayChart',past,{futurePoints:future});
-  document.getElementById('futureLegend').classList.toggle('hidden',!future.length);
-}
-
-function resetReplaySteps(){
-  replayStage=0;
-  ['decisionStep','applyStep','resultStep'].forEach(id=>{const el=document.getElementById(id);el.classList.add('locked-step');el.classList.remove('unlocked-step');});
-  setText('replayDecisionTitle','Esperando consulta');
-  document.getElementById('replayDecisionBody').textContent='Todavía no sabes qué eligió.';
-  setText('replayApplyTitle','Aún no aplicada');
-  document.getElementById('replayApplyBody').textContent='El precio de apertura sigue oculto.';
-  setText('replayResultTitle','Futuro oculto');
-  document.getElementById('replayResultBody').textContent='Aquí aparecerá el cierre siguiente y cuánto habría cambiado el capital.';
-  const apply=document.getElementById('applyReplay');apply.classList.add('hidden');apply.disabled=false;
-  const reveal=document.getElementById('revealReplay');reveal.classList.add('hidden');reveal.disabled=false;
-  const ask=document.getElementById('askReplay');ask.disabled=false;ask.textContent='Consultar a ChatGPT';
-  renderReplayChart();
-}
-
-function loadReplaySession(replayId){
-  currentReplay=replayData.sessions.find(s=>s.replay_id===replayId) || replayData.sessions[0];
-  const symbolSelect=document.getElementById('replaySymbol');
-  const symbols=Object.keys(currentReplay.charts||{}).sort((a,b)=>a==='SPY'?-1:b==='SPY'?1:a.localeCompare(b));
-  symbolSelect.innerHTML=symbols.map(s=>`<option value="${s}">${s}</option>`).join('');
-  symbolSelect.value='SPY';
-  resetReplaySteps();
+function loadReplay(id){
+  currentReplay=replayData.sessions.find(s=>s.replay_id===id)||replayData.sessions[0];
+  const scope=currentReplay.analysis_scope||{};
+  setText('analysisScope',`ChatGPT comparó ${scope.universe_size||18} acciones, ${scope.daily_history_target||'histórico amplio'}, horizontes ${(scope.technical_horizons||[]).join(', ')} y noticias cutoff-safe.`);
+  resetReplay();
 }
 
 function renderReplayData(data){
   replayData=data;
   const select=document.getElementById('replayDate');
-  select.innerHTML=[...data.sessions].reverse().map(s=>`<option value="${s.replay_id}">${dayFmt(s.cutoff_date)}${s.result_next_session?.available?'':' · futuro aún no ocurrido'}</option>`).join('');
-  const first=[...data.sessions].reverse().find(s=>s.result_next_session?.available) || data.sessions[data.sessions.length-1];
+  select.innerHTML=[...data.sessions].reverse().map(s=>`<option value="${esc(s.replay_id)}">${dayFmt(s.cutoff_date)}</option>`).join('');
+  const first=[...data.sessions].reverse()[0];
   select.value=first.replay_id;
-  loadReplaySession(first.replay_id);
+  loadReplay(first.replay_id);
 }
 
-document.getElementById('replayDate').addEventListener('change',e=>loadReplaySession(e.target.value));
-document.getElementById('replaySymbol').addEventListener('change',renderReplayChart);
-document.getElementById('range1w').addEventListener('click',()=>{replayRange='1W';document.getElementById('range1w').classList.add('active');document.getElementById('range1m').classList.remove('active');renderReplayChart();});
-document.getElementById('range1m').addEventListener('click',()=>{replayRange='1M';document.getElementById('range1m').classList.add('active');document.getElementById('range1w').classList.remove('active');renderReplayChart();});
+document.getElementById('replayDate').addEventListener('change',e=>loadReplay(e.target.value));
 
-document.getElementById('askReplay').addEventListener('click',()=>{
-  if(!currentReplay) return;
-  replayStage=1;
-  const d=currentReplay.decision;
-  unlock('decisionStep');
-  setText('replayDecisionTitle',d.action==='NO_TRADE'?'ChatGPT decidió esperar':`${d.action} ${d.symbol}`);
-  document.getElementById('replayDecisionBody').innerHTML=`<div class="decision-summary"><strong>${d.action}${d.symbol?` ${d.symbol}`:''}</strong><span>Confianza ${Math.round((d.confidence??0)*100)}%${d.notional_eur?` · ${eur(d.notional_eur)}`:''}${d.horizon_days?` · horizonte ${d.horizon_days} días`:''}</span><div class="reason-box"><b>Por qué:</b> ${d.thesis}</div><div class="reason-box"><b>Qué podría salir mal:</b> ${d.counter_thesis}</div></div>`;
-  document.getElementById('applyReplay').classList.remove('hidden');
-  const ask=document.getElementById('askReplay');ask.disabled=true;ask.textContent='Respuesta revelada';
-  if(d.symbol && currentReplay.charts?.[d.symbol]) document.getElementById('replaySymbol').value=d.symbol;
-  renderReplayChart();
+document.getElementById('scanMarket').addEventListener('click',()=>{
+  if(!currentReplay)return;
+  scanned=true;
+  const s=currentReplay.selection||{};
+  const selected=s.selected_symbol;
+  const rows=(s.shortlist||[]).map(r=>`<div class="scan-row"><strong>${esc(r.symbol)}</strong><span class="score-pill">${Math.round((r.score||0)*100)}%</span><span>${esc(r.reason)}</span></div>`).join('');
+  document.getElementById('scanResult').innerHTML=`<div class="short-decision"><strong>${selected?`Foco: ${esc(selected)}`:'Hoy no hay un candidato claro'}</strong><span>${esc(s.selection_summary||'')}</span></div>${rows?`<div class="scan-shortlist">${rows}</div>`:''}<p class="small-muted">Por qué no las demás: ${esc(s.why_not_others||'')}</p>`;
+  document.getElementById('scanResult').classList.remove('hidden');
+  document.getElementById('professionalChartCard').classList.remove('hidden');
+  unlock('decisionCard');
+  document.getElementById('askDecision').classList.remove('hidden');
+  const btn=document.getElementById('scanMarket');btn.disabled=true;btn.textContent='Mercado explorado';
+  renderProfessionalChart();
 });
 
-document.getElementById('applyReplay').addEventListener('click',()=>{
-  if(!currentReplay) return;
-  replayStage=2;
-  const d=currentReplay.decision;
-  const r=currentReplay.result_next_session;
-  unlock('applyStep');
-  if(d.action==='NO_TRADE'){
-    setText('replayApplyTitle','No se abrió posición');
-    document.getElementById('replayApplyBody').innerHTML='<div class="apply-ticket"><span>ChatGPT prefirió conservar los €1.000 ficticios en cash.</span></div>';
-  } else if(r?.available){
-    setText('replayApplyTitle',`${d.symbol} comprado en la apertura`);
-    document.getElementById('replayApplyBody').innerHTML=`<div class="apply-ticket"><div class="ticket-row"><span>Fecha</span><strong>${dayFmt(r.session_date)}</strong></div><div class="ticket-row"><span>Capital asignado</span><strong>${eur(d.notional_eur)}</strong></div><div class="ticket-row"><span>Precio simulado de entrada</span><strong>$${num(r.entry)}</strong></div><div class="ticket-row"><span>Acciones simuladas</span><strong>${num(r.shares_simulated)}</strong></div></div>`;
-  } else {
-    setText('replayApplyTitle','La apertura siguiente aún no ocurrió');
-    document.getElementById('replayApplyBody').textContent='Este replay llegó al borde del presente. No revelaremos un precio futuro inexistente.';
+function renderEvidence(){
+  const list=document.getElementById('evidenceList');
+  const rows=currentReplay.evidence||[];
+  if(!rows.length){list.innerHTML='<div class="small-muted">No hubo noticias cutoff-safe suficientemente relevantes para este replay.</div>';return;}
+  list.innerHTML=rows.map(row=>`<div class="evidence-item"><a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">${esc(row.headline||row.source||row.url)}</a><span>${esc(row.summary||'')}</span><span class="evidence-meta">${esc(row.source||'')} · ${dateFmt(row.published_at)}</span></div>`).join('');
+}
+
+document.getElementById('askDecision').addEventListener('click',()=>{
+  if(!currentReplay)return;
+  asked=true;
+  const d=currentReplay.decision||{};
+  const title=d.action==='BUY'?`BUY ${d.symbol}`:'NO TRADE';
+  document.getElementById('decisionShort').innerHTML=`<div class="short-decision"><strong>${esc(title)}</strong><span>${d.notional_eur?`${eur(d.notional_eur)} · `:''}confianza ${Math.round((d.confidence||0)*100)}%${d.horizon_days?` · ${d.horizon_days} días`:''}${d.stop_pct?` · stop ${pct(d.stop_pct*100)}`:''}${d.target_price?` · objetivo ${usd(d.target_price)}`:''}</span><p>${esc(d.short_answer||d.thesis||'')}</p></div>`;
+  document.getElementById('decisionShort').classList.remove('hidden');
+  setText('lessonSelection',currentReplay.selection?.selection_summary||'');
+  setText('lessonChart',d.chart_reading||'');
+  setText('lessonNews',d.news_reading||'');
+  setText('lessonRisk',`${d.counter_thesis||''}\n\n${d.risk_lesson||''}`);
+  renderEvidence();
+  document.getElementById('lessonCard').classList.remove('hidden');
+  unlock('applyCard');
+  document.getElementById('applyDecision').classList.remove('hidden');
+  const btn=document.getElementById('askDecision');btn.disabled=true;btn.textContent='Respuesta revelada';
+  renderProfessionalChart();
+});
+
+document.getElementById('applyDecision').addEventListener('click',()=>{
+  if(!currentReplay)return;
+  applied=true;
+  const d=currentReplay.decision||{};
+  const r=currentReplay.result||{};
+  if(d.action!=='BUY'){
+    document.getElementById('applyResult').innerHTML='<div class="apply-ticket"><strong>No se abrió posición.</strong><span>La IA conservó los €1.000 ficticios en cash.</span></div>';
+  }else if(r.available){
+    document.getElementById('applyResult').innerHTML=`<div class="apply-ticket"><div class="ticket-row"><span>Activo</span><strong>${esc(d.symbol)}</strong></div><div class="ticket-row"><span>Capital asignado</span><strong>${eur(d.notional_eur)}</strong></div><div class="ticket-row"><span>Entrada simulada</span><strong>${usd(r.entry_price)}</strong></div><div class="ticket-row"><span>Primera sesión</span><strong>${dayFmt(r.entry_day)}</strong></div></div>`;
+  }else{
+    document.getElementById('applyResult').textContent='La entrada todavía no existe en este replay.';
   }
-  document.getElementById('revealReplay').classList.remove('hidden');
-  document.getElementById('applyReplay').disabled=true;
-  renderReplayChart();
+  document.getElementById('applyResult').classList.remove('hidden');
+  unlock('followCard');
+  const lifecycle=currentReplay.lifecycle||[];
+  if(lifecycle.length)document.getElementById('advanceDay').classList.remove('hidden');
+  else{unlock('revealCard');document.getElementById('revealFuture').classList.remove('hidden');}
+  document.getElementById('applyDecision').disabled=true;
+  renderProfessionalChart();
 });
 
-document.getElementById('revealReplay').addEventListener('click',()=>{
-  if(!currentReplay) return;
-  replayStage=3;
-  const d=currentReplay.decision;
-  const r=currentReplay.result_next_session;
-  unlock('resultStep');
-  if(!r?.available){
-    setText('replayResultTitle','Todavía no existe el resultado');
-    document.getElementById('replayResultBody').textContent='La siguiente sesión todavía no ha ocurrido. Este es exactamente el comportamiento que tendrá el modo en vivo.';
-  } else if(d.action==='NO_TRADE'){
-    setText('replayResultTitle','Capital intacto');
-    document.getElementById('replayResultBody').innerHTML=`<div class="result-ticket"><div class="ticket-row"><span>P/L de la decisión</span><strong class="neutral">${eur(0)}</strong></div><div class="ticket-row"><span>SPY ese día</span><strong>${pct(r.benchmark_return_pct)}</strong></div><span>ChatGPT decidió no exponerse y conservó los €1.000 ficticios.</span></div>`;
-  } else {
-    const after=1000+r.net_pnl_eur;
-    setText('replayResultTitle',r.net_pnl_eur>0?'La idea habría ganado':r.net_pnl_eur<0?'La idea habría perdido':'Resultado plano');
-    document.getElementById('replayResultBody').innerHTML=`<div class="result-ticket"><div class="ticket-row"><span>Cierre siguiente</span><strong>$${num(r.close)}</strong></div><div class="ticket-row"><span>Resultado</span><strong class="${pnlClass(r.net_pnl_eur)}">${eur(r.net_pnl_eur)}</strong></div><div class="ticket-row"><span>Capital después</span><strong>${eur(after)}</strong></div><div class="ticket-row"><span>Retorno sobre lo asignado</span><strong>${pct(r.return_pct)}</strong></div><div class="ticket-row"><span>SPY ese día</span><strong>${pct(r.benchmark_return_pct)}</strong></div></div>`;
+function renderLifecycle(){
+  const rows=(currentReplay.lifecycle||[]).slice(0,followVisible);
+  const body=rows.map(r=>`<tr><td>${dayFmt(r.date)}</td><td><strong>${esc(r.action)}</strong></td><td>${Math.round((r.confidence||0)*100)}%</td><td>${esc(r.new_information)}</td><td>${esc(r.reason)}</td></tr>`).join('');
+  document.getElementById('followResult').innerHTML=`<div class="follow-table"><table><thead><tr><th>Fecha</th><th>Qué haría</th><th>Confianza</th><th>Nueva información</th><th>Por qué</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  document.getElementById('followResult').classList.remove('hidden');
+}
+
+document.getElementById('advanceDay').addEventListener('click',()=>{
+  const lifecycle=currentReplay.lifecycle||[];
+  if(followVisible<lifecycle.length)followVisible+=1;
+  renderLifecycle();
+  const done=followVisible>=lifecycle.length||lifecycle[followVisible-1]?.action==='SELL';
+  if(done){
+    document.getElementById('advanceDay').disabled=true;
+    document.getElementById('advanceDay').textContent=lifecycle[followVisible-1]?.action==='SELL'?'La IA decidió salir':'Seguimiento completado';
+    unlock('revealCard');
+    document.getElementById('revealFuture').classList.remove('hidden');
   }
-  document.getElementById('revealReplay').disabled=true;
-  renderReplayChart();
 });
+
+document.getElementById('revealFuture').addEventListener('click',()=>{
+  revealed=true;
+  const d=currentReplay.decision||{};
+  const r=currentReplay.result||{};
+  const future=currentReplay.chart?.candles_after_cutoff||[];
+  let hindsight='';
+  if(d.action==='BUY'&&r.available&&future.length){
+    const afterExit=future.filter(x=>r.exit_day&&x.date>r.exit_day);
+    if(afterExit.length){
+      const maxHigh=Math.max(...afterExit.map(x=>x.high));
+      hindsight=`<div class="ticket-row"><span>Máximo posterior a la salida</span><strong>${usd(maxHigh)}</strong></div>`;
+    }
+  }
+  if(d.action!=='BUY'){
+    document.getElementById('revealResult').innerHTML='<div class="result-ticket"><strong>NO TRADE</strong><span>El capital habría permanecido en €1.000. Las velas posteriores se muestran sólo como diagnóstico retrospectivo.</span></div>';
+  }else if(r.available){
+    document.getElementById('revealResult').innerHTML=`<div class="result-ticket"><div class="ticket-row"><span>Entrada</span><strong>${usd(r.entry_price)} · ${dayFmt(r.entry_day)}</strong></div><div class="ticket-row"><span>Salida siguiendo a la IA</span><strong>${usd(r.exit_price)} · ${dayFmt(r.exit_day)}</strong></div><div class="ticket-row"><span>P/L</span><strong class="${pnlClass(r.net_pnl_eur)}">${eur(r.net_pnl_eur)}</strong></div><div class="ticket-row"><span>Capital final</span><strong>${eur(r.capital_after_eur)}</strong></div><div class="ticket-row"><span>Retorno sobre lo asignado</span><strong>${pct(r.return_pct)}</strong></div><div class="ticket-row"><span>SPY mismo intervalo</span><strong>${pct(r.spy_return_pct)}</strong></div>${hindsight}<p class="small-muted">La comparación posterior es hindsight-only: nunca fue entregada a la IA durante el replay.</p></div>`;
+  }else{
+    document.getElementById('revealResult').textContent='Aún no existe un resultado posterior.';
+  }
+  document.getElementById('revealResult').classList.remove('hidden');
+  document.getElementById('revealFuture').disabled=true;
+  renderProfessionalChart();
+});
+
+function drawEquity(series){
+  const svg=document.getElementById('equityChart');
+  if(!svg||!series?.length)return;
+  const vals=series.map(x=>x.equity_eur);const min=Math.min(...vals),max=Math.max(...vals),span=Math.max(max-min,1);
+  const pts=series.map((p,i)=>`${10+(i/Math.max(1,series.length-1))*780},${240-((p.equity_eur-min)/span)*210}`).join(' ');
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/>`;
+}
 
 function renderLive(data){
-  setText('startingCapital',eur(data.starting_capital_eur));
-  setText('currentEquity',eur(data.current_equity_eur));
-  const pnl=document.getElementById('totalPnl'); pnl.textContent=eur(data.total_net_pnl_eur); pnl.className=pnlClass(data.total_net_pnl_eur);
-  setText('wins',data.counts?.wins ?? 0); setText('losses',data.counts?.losses ?? 0); setText('noTrades',data.counts?.no_trades ?? 0); setText('decisions',data.counts?.decisions ?? 0);
-  const latest=data.latest_decision;
-  if(latest){
-    setText('latestTitle',latest.action==='NO_TRADE'?'Hoy decidió no hacer nada':`${latest.action} ${latest.symbol ?? ''}`.trim());
-    setText('latestThesis',latest.thesis);
-    const badge=document.getElementById('latestBadge'); badge.textContent=latest.action; badge.className='decision-badge '+(latest.action==='BUY'?'badge-win':latest.action==='SELL'?'badge-loss':'badge-neutral');
-    document.getElementById('latestMeta').innerHTML=`<span>${dateFmt(latest.decision_at)}</span><span>Confianza ${Math.round((latest.confidence??0)*100)}%</span><span>${latest.notional_eur?eur(latest.notional_eur):'Sin capital asignado'}</span>`;
-  }
-  const positions=document.getElementById('positions');
-  if(data.open_positions?.length){ positions.classList.remove('empty'); positions.innerHTML=data.open_positions.map(p=>`<div class="stack-item"><strong>${p.symbol}</strong><span>${eur(p.notional_eur)}</span></div>`).join(''); }
-  const away=document.getElementById('whileAway');
-  if(data.while_away?.length){ away.classList.remove('empty'); away.innerHTML=[...data.while_away].reverse().map(r=>`<div class="stack-item"><div><strong>${r.action}${r.symbol?' '+r.symbol:''}</strong><div class="neutral">${dateFmt(r.decision_at)}</div></div><span class="${pnlClass(r.net_pnl_eur)}">${r.net_pnl_eur==null?r.result:eur(r.net_pnl_eur)}</span></div>`).join(''); }
-  const tbody=document.getElementById('historyBody');
-  if(data.history?.length){ tbody.innerHTML=[...data.history].reverse().map(r=>`<tr><td>${dateFmt(r.decision_at)}</td><td>${r.symbol??'—'}</td><td>${r.action}</td><td>${r.result}</td><td class="${pnlClass(r.net_pnl_eur)}">${r.net_pnl_eur==null?'—':eur(r.net_pnl_eur)}</td></tr>`).join(''); }
+  setText('startingCapital',eur(data.starting_capital_eur));setText('currentEquity',eur(data.current_equity_eur));
+  const pnl=document.getElementById('totalPnl');pnl.textContent=eur(data.total_net_pnl_eur);pnl.className=pnlClass(data.total_net_pnl_eur);
+  setText('wins',data.counts?.wins??0);setText('losses',data.counts?.losses??0);setText('noTrades',data.counts?.no_trades??0);setText('decisions',data.counts?.decisions??0);
+  const latest=data.latest_decision;if(latest){setText('latestTitle',latest.action==='NO_TRADE'?'Hoy decidió no hacer nada':`${latest.action} ${latest.symbol??''}`.trim());setText('latestThesis',latest.thesis);const badge=document.getElementById('latestBadge');badge.textContent=latest.action;badge.className='decision-badge '+(latest.action==='BUY'?'badge-win':latest.action==='SELL'?'badge-loss':'badge-neutral');document.getElementById('latestMeta').innerHTML=`<span>${dateFmt(latest.decision_at)}</span><span>Confianza ${Math.round((latest.confidence??0)*100)}%</span><span>${latest.notional_eur?eur(latest.notional_eur):'Sin capital asignado'}</span>`;}
+  const positions=document.getElementById('positions');if(data.open_positions?.length){positions.classList.remove('empty');positions.innerHTML=data.open_positions.map(p=>`<div class="stack-item"><strong>${esc(p.symbol)}</strong><span>${eur(p.notional_eur)}</span></div>`).join('');}
+  const away=document.getElementById('whileAway');if(data.while_away?.length){away.classList.remove('empty');away.innerHTML=[...data.while_away].reverse().map(r=>`<div class="stack-item"><div><strong>${esc(r.action)}${r.symbol?' '+esc(r.symbol):''}</strong><div class="neutral">${dateFmt(r.decision_at)}</div></div><span class="${pnlClass(r.net_pnl_eur)}">${r.net_pnl_eur==null?esc(r.result):eur(r.net_pnl_eur)}</span></div>`).join('');}
+  const tbody=document.getElementById('historyBody');if(data.history?.length){tbody.innerHTML=[...data.history].reverse().map(r=>`<tr><td>${dateFmt(r.decision_at)}</td><td>${esc(r.symbol??'—')}</td><td>${esc(r.action)}</td><td>${esc(r.result)}</td><td class="${pnlClass(r.net_pnl_eur)}">${r.net_pnl_eur==null?'—':eur(r.net_pnl_eur)}</td></tr>`).join('');}
   drawEquity(data.equity_series);
-  const a=data.advanced??{};
-  document.getElementById('advanced').innerHTML=`<div><span class="label">Drawdown máximo</span><strong>${(a.max_drawdown_pct??0).toFixed(2)}%</strong></div><div><span class="label">Benchmark medio</span><strong>${(a.benchmark_return_pct_mean??0).toFixed(2)}%</strong></div><div><span class="label">Puntos</span><strong>${a.score_points??0}</strong></div>`;
-  const health=data.health??{};
-  const pill=document.getElementById('statusPill');
-  if(health.last_error_kind){ pill.textContent=`Atención: ${health.last_error_kind}`; }
-  else { pill.textContent=data.simulation_only?'SIMULACIÓN · €0 real':'Estado disponible'; }
-  setText('lastUpdated', health.updated_at ? `Actualizado ${dateFmt(health.updated_at)}` : 'Página lista · esperando primera sesión live');
+  const health=data.health||{};const pill=document.getElementById('statusPill');pill.textContent=health.last_error_kind?`Atención: ${health.last_error_kind}`:'SIMULACIÓN · €0 real';
 }
 
-Promise.allSettled([
-  fetch('./data/dashboard.json',{cache:'no-store'}).then(r=>{if(!r.ok) throw new Error(`dashboard HTTP ${r.status}`); return r.json();}),
-  fetch('./data/replay/index.json',{cache:'no-store'}).then(r=>{if(!r.ok) throw new Error(`replay HTTP ${r.status}`); return r.json();})
-]).then(([dashboard,replay])=>{
-  if(dashboard.status==='fulfilled') renderLive(dashboard.value);
-  if(replay.status==='fulfilled' && replay.value?.sessions?.length){renderReplayData(replay.value);switchMode('replay');}
-  else {switchMode('live');}
-}).catch(()=>{document.getElementById('statusPill').textContent='Aún sin datos públicos';});
+Promise.all([
+  fetch('./data/replay-v2.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(`replay-v2 ${r.status}`);return r.json();}),
+  fetch('./data/dashboard.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error(`dashboard ${r.status}`);return r.json();}),
+]).then(([replays,live])=>{renderReplayData(replays);renderLive(live);setText('lastUpdated',`Replay v2 generado ${dateFmt(replays.generated_at)}`);}).catch(err=>{
+  document.getElementById('scanResult').classList.remove('hidden');
+  document.getElementById('scanResult').innerHTML=`<div class="small-muted">El Professional Replay v2 todavía se está generando o publicando. ${esc(err.message)}</div>`;
+  setText('statusPill','Preparando Replay v2');
+});
