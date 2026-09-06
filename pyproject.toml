@@ -7,7 +7,7 @@ name = "ai-trading-forward-lab"
 version = "0.1.0"
 description = "Forward-only simulated trading lab driven by AI decisions"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["openai>=1.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
