@@ -33,13 +33,33 @@ jobs:
       - name: Test before decision cycle
         run: python -m pytest
 
+      - name: Build fresh sanitized runtime context
+        env:
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
+        run: python -m engine.runtime_context
+
       - name: Run guarded simulated decision cycle
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
         run: python -m engine.automation_runner decision
+
+      - name: Rebuild sanitized public dashboard
+        run: |
+          python - <<'PY'
+          from engine.public_data import build_public_dashboard
+          build_public_dashboard(
+              decisions_path='data/decisions.jsonl',
+              evaluations_path='data/evaluations.jsonl',
+              health_path='data/health.json',
+              output_path='data/public/dashboard.json',
+          )
+          PY
 
       - name: Test state after cycle
         run: python -m pytest
