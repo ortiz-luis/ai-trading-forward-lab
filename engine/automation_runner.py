@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
+import json
 import os
 from pathlib import Path
 
@@ -10,24 +11,37 @@ from .automation import (
     mark_decision_success,
     mark_evaluation_success,
     record_system_error,
-    run_guarded_step,
 )
+from .decision_contract import DecisionInput
+from .evaluator import EvaluationRules, PricePoint, evaluate_long_decision, to_evaluation_event
+from .ledger import append_decision, append_jsonl, make_decision_id, make_idempotency_key, stable_hash
+from .schemas import DecisionEvent
 
 DATA_DIR = Path("data")
 DECISIONS = DATA_DIR / "decisions.jsonl"
+EVALUATIONS = DATA_DIR / "evaluations.jsonl"
 SYSTEM_EVENTS = DATA_DIR / "system_events.jsonl"
 HEALTH = DATA_DIR / "health.json"
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def _session_date() -> str:
     explicit = os.getenv("AITFL_SESSION_DATE")
     if explicit:
         return explicit
-    return datetime.utcnow().date().isoformat()
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _load_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def run_decision_cycle() -> int:
     session_date = _session_date()
+    key = make_idempotency_key(session_date, "v1")
     if decision_already_exists(DECISIONS, session_date=session_date):
         return 0
 
@@ -42,9 +56,6 @@ def run_decision_cycle() -> int:
         )
         return 0
 
-    # Full context acquisition is intentionally fail-closed until an evidence source
-    # supplies a sanitized, timestamped context artifact. This runner establishes the
-    # unattended control boundary without inventing evidence.
     context_path = DATA_DIR / "runtime_context.json"
     if not context_path.exists():
         record_system_error(
@@ -54,49 +65,108 @@ def run_decision_cycle() -> int:
         )
         return 0
 
-    def _decision_boundary():
-        from .providers.openai_provider import OpenAIDecisionProvider
-        raise RuntimeError(
-            "live decision orchestration requires the context-to-DecisionInput adapter; "
-            "blocked rather than creating an unauditable decision"
+    try:
+        raw = _load_json(context_path)
+        input_data = DecisionInput(
+            cutoff_at=raw["cutoff_at"],
+            portfolio=raw["portfolio"],
+            protocol=raw["protocol"],
+            market=raw["market"],
+            evidence=raw["evidence"],
+            model_identifier=os.getenv("OPENAI_MODEL") or None,
         )
+        instructions = Path("prompts/trading_v1.md").read_text(encoding="utf-8")
 
-    result = run_guarded_step(
-        step_name="decision",
-        callback=_decision_boundary,
-        health_path=HEALTH,
-        system_events_path=SYSTEM_EVENTS,
-        error_kind="AI_ERROR",
-    )
-    if result is None:
+        from .providers.openai_decision import OpenAIDecisionProvider
+
+        provider = OpenAIDecisionProvider()
+        result = provider.decide(input_data, instructions=instructions)
+        if not result.ok or result.decision is None:
+            record_system_error(
+                SYSTEM_EVENTS,
+                kind="AI_ERROR",
+                message=result.error_message or "OpenAI returned no valid decision",
+                details={"model": result.model, "repaired": result.repaired},
+            )
+            return 0
+
+        out = result.decision
+        now = utc_now_iso()
+        event = DecisionEvent(
+            decision_id=make_decision_id(key),
+            idempotency_key=key,
+            decision_at=now,
+            cutoff_at=input_data.cutoff_at,
+            action=out.action,
+            symbol=out.symbol,
+            notional_eur=out.notional_eur,
+            confidence=out.confidence,
+            horizon_days=out.horizon_days,
+            stop_pct=out.stop_pct,
+            thesis=out.thesis,
+            counter_thesis=out.counter_thesis,
+            prompt_version="trading-v1",
+            model=result.model,
+            sources_hash=stable_hash({"sources": list(out.sources)}),
+        )
+        append_decision(DECISIONS, event)
+        mark_decision_success(HEALTH, at=now)
         return 0
-    mark_decision_success(HEALTH)
-    return 0
+    except Exception as exc:
+        record_system_error(
+            SYSTEM_EVENTS,
+            kind="AI_ERROR",
+            message=f"decision cycle failed closed: {type(exc).__name__}: {exc}",
+        )
+        return 0
 
 
 def run_evaluation_cycle() -> int:
-    # Evaluation is safe to invoke periodically even when no position is ready.
-    # The later data-build gate will supply price-window artifacts consumed here.
-    evaluation_input = DATA_DIR / "evaluation_input.json"
-    if not evaluation_input.exists():
+    input_path = DATA_DIR / "evaluation_input.json"
+    if not input_path.exists():
         return 0
 
-    def _evaluation_boundary():
-        raise RuntimeError(
-            "evaluation_input exists but production price-window adapter is not yet wired"
+    try:
+        raw = _load_json(input_path)
+        decision = DecisionEvent.from_dict(raw["decision"])
+        asset_prices = tuple(PricePoint(**row) for row in raw["asset_prices"])
+        benchmark_prices = tuple(PricePoint(**row) for row in raw["benchmark_prices"])
+        rules = EvaluationRules(**raw.get("rules", {}))
+        result = evaluate_long_decision(
+            decision,
+            asset_prices=asset_prices,
+            benchmark_prices=benchmark_prices,
+            rules=rules,
+            explicit_sell_index=raw.get("explicit_sell_index"),
         )
-
-    result = run_guarded_step(
-        step_name="evaluation",
-        callback=_evaluation_boundary,
-        health_path=HEALTH,
-        system_events_path=SYSTEM_EVENTS,
-        error_kind="DATA_ERROR",
-    )
-    if result is None:
+        now = utc_now_iso()
+        evaluation_id = stable_hash(
+            {
+                "decision_id": decision.decision_id,
+                "exit_price": result.exit_price,
+                "exit_reason": result.exit_reason,
+            }
+        )[:32]
+        event = to_evaluation_event(
+            result,
+            evaluation_id=evaluation_id,
+            decision_id=decision.decision_id,
+            evaluated_at=now,
+        )
+        existing = []
+        if EVALUATIONS.exists():
+            existing = [json.loads(line) for line in EVALUATIONS.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if not any(row.get("evaluation_id") == evaluation_id for row in existing):
+            append_jsonl(EVALUATIONS, event.to_dict(), unique_key="evaluation_id")
+        mark_evaluation_success(HEALTH, at=now)
         return 0
-    mark_evaluation_success(HEALTH)
-    return 0
+    except Exception as exc:
+        record_system_error(
+            SYSTEM_EVENTS,
+            kind="DATA_ERROR",
+            message=f"evaluation cycle failed closed: {type(exc).__name__}: {exc}",
+        )
+        return 0
 
 
 def main() -> int:
