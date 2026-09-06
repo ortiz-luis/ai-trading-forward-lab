@@ -109,18 +109,25 @@ def validate_evidence_for_cutoff(
     record.validate()
     cutoff = _utc(cutoff_at)
     retrieved = _utc(record.retrieved_at)
-    if retrieved < _utc(record.published_at) if record.published_at is not None else False:
-        raise EvidenceError("retrieved_at cannot precede published_at")
+
     if policy.require_published_at and record.published_at is None:
         raise UndatedEvidence(f"undated evidence rejected: {record.url}")
+
+    published = _utc(record.published_at) if record.published_at is not None else None
+    # Future information is the highest-priority failure class. Detect it before
+    # checking publication/retrieval ordering so leakage is never hidden behind a
+    # generic timestamp-consistency error.
+    if published is not None and published > cutoff:
+        raise PostCutoffEvidence(f"evidence published after cutoff: {record.url}")
+    if retrieved > cutoff:
+        raise PostCutoffEvidence(f"evidence retrieved after cutoff: {record.url}")
+    if published is not None and retrieved < published:
+        raise EvidenceError("retrieved_at cannot precede published_at")
+
     age = evidence_age_hours(record, cutoff_at=cutoff_at)
     max_age = policy.primary_max_age_hours if record.kind == EvidenceKind.PRIMARY else policy.secondary_max_age_hours
     if age > max_age:
         raise StaleEvidence(f"evidence too old for decision context: {record.url}")
-    if retrieved > cutoff:
-        # Retrieval can occur slightly after scheduling in future orchestration, but the
-        # decision context must not claim it existed at cutoff. Fail closed in v1.
-        raise PostCutoffEvidence(f"evidence retrieved after cutoff: {record.url}")
     return record
 
 
@@ -131,7 +138,6 @@ def build_evidence_context(
     policy: EvidencePolicy = DEFAULT_EVIDENCE_POLICY,
 ) -> tuple[EvidenceRecord, ...]:
     valid = [validate_evidence_for_cutoff(row, cutoff_at=cutoff_at, policy=policy) for row in records]
-    # Primary sources first, then newest publication first, then URL for deterministic ties.
     valid.sort(
         key=lambda row: (
             0 if row.kind == EvidenceKind.PRIMARY else 1,
