@@ -1,3 +1,5 @@
+import pytest
+
 from engine.replay_generator import _cutoff_at, _next_day_result
 
 
@@ -45,4 +47,4 @@ def test_no_trade_keeps_capital_flat():
         all_bars=bars,
     )
     assert result["net_pnl_eur"] == 0.0
-    assert result["benchmark_return_pct"] == 2.0
+    assert result["benchmark_return_pct"] == pytest.approx(2.0)
