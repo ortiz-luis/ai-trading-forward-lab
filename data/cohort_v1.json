@@ -1,0 +1,27 @@
+{
+  "cohort_id": "forward-v1",
+  "status": "ARMED_NOT_STARTED",
+  "starting_capital_eur": 1000.0,
+  "protocol_version": "v1",
+  "prompt_version": "trading-v1",
+  "model": "gpt-5.6-terra",
+  "market_provider": "alpaca-market-data",
+  "evidence_policy": {
+    "max_items": 12,
+    "primary_max_age_hours": 168,
+    "secondary_max_age_hours": 72,
+    "require_published_at": true
+  },
+  "decision_schedule": "16:17 Monday-Friday",
+  "timezone": "Europe/Paris",
+  "frozen_components": {
+    "prompt": "f80a6bd2b8e58fb0918fd5e89e5480724a64a398",
+    "protocol": "e4290dd641407cc3ce8d523ad8c3cb5e0dac42f3",
+    "evidence": "a0e5fac8e42e420a582ce4a6e93211b2ba145d56",
+    "openai_provider": "de9e5181671899eb7b0e595106055cbe1d09c2ec",
+    "market_provider": "4397c6d9bcbd23c2812fef8cfd5e46a692fd12b8",
+    "evaluator": "0a995c73abd49691f0d097978d224526cf3690eb"
+  },
+  "started_at": null,
+  "observation_count": 0
+}
