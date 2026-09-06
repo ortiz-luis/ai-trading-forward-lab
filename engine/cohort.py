@@ -60,6 +60,12 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def _write_cohort(path: str | Path, cohort: CohortFreeze) -> CohortFreeze:
+    cohort.validate()
+    Path(path).write_text(json.dumps(asdict(cohort), sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return cohort
+
+
 def load_cohort(path: str | Path = "data/cohort_v1.json") -> CohortFreeze:
     cohort = CohortFreeze.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
     cohort.validate()
@@ -102,8 +108,14 @@ def start_cohort(
         decisions_path=decisions_path,
         env=env,
     )
-    started = replace(cohort, status="STARTED", started_at=started_at or utc_now_iso())
-    started.validate()
-    target = Path(cohort_path)
-    target.write_text(json.dumps(asdict(started), sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    return started
+    return _write_cohort(
+        cohort_path,
+        replace(cohort, status="STARTED", started_at=started_at or utc_now_iso()),
+    )
+
+
+def record_observation(path: str | Path = "data/cohort_v1.json") -> CohortFreeze:
+    cohort = load_cohort(path)
+    if cohort.status != "STARTED":
+        raise CohortStartBlocked("cannot record an observation before cohort start")
+    return _write_cohort(path, replace(cohort, observation_count=cohort.observation_count + 1))
