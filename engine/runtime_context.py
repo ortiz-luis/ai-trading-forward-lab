@@ -10,7 +10,7 @@ from .effective_portfolio import rebuild_effective_portfolio_from_ledgers
 from .evidence import EvidenceKind, EvidenceRecord, build_evidence_context, write_evidence_manifest
 from .protocol import PROTOCOL_V1
 from .providers.alpaca import AlpacaMarketDataProvider
-from .providers.market import MarketDataProvider, require_tradeable_quote
+from .providers.market import MarketClosed, MarketDataProvider, require_tradeable_quote
 
 
 def utc_now() -> datetime:
@@ -53,10 +53,18 @@ def build_runtime_context(
     benchmark = benchmark_symbol or PROTOCOL_V1.benchmark_symbol
     requested = tuple(dict.fromkeys((*universe, benchmark)))
 
+    cutoff_dt = now_fn().astimezone(timezone.utc)
+    cutoff_at = utc_iso(cutoff_dt)
+
     market: dict[str, object] = {}
     observed_times: list[str] = []
     for symbol in requested:
         quote = provider.get_quote(symbol)
+        if not quote.market_open:
+            raise MarketClosed(
+                "US market is closed; forward cohort context is only built during an open trading session"
+            )
+        require_tradeable_quote(quote, now=cutoff_dt)
         candles = provider.get_candles(symbol, limit=candle_limit)
         market[symbol] = {
             "price": quote.price,
@@ -77,21 +85,6 @@ def build_runtime_context(
             ],
         }
         observed_times.append(quote.observed_at)
-
-    cutoff_dt = now_fn().astimezone(timezone.utc)
-    cutoff_at = utc_iso(cutoff_dt)
-    for symbol in requested:
-        quote_payload = market[symbol]
-        from .providers.market import MarketQuote
-        quote = MarketQuote(
-            symbol=symbol,
-            price=float(quote_payload["price"]),
-            currency=str(quote_payload["currency"]),
-            observed_at=str(quote_payload["observed_at"]),
-            market_open=bool(quote_payload["market_open"]),
-            stale_after_seconds=300,
-        )
-        require_tradeable_quote(quote, now=cutoff_dt)
 
     latest_observed = max(observed_times)
     evidence = build_evidence_context(
