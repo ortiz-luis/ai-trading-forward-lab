@@ -28,9 +28,9 @@
     <section id="replayPanel" class="mode-panel">
       <section class="card replay-intro">
         <div>
-          <p class="eyebrow">Professional Replay v2</p>
-          <h2>La IA sabe mucho más de lo que cabe en tu pantalla</h2>
-          <p class="body-copy">La vista puede estar en 1 mes, pero el motor compara todo el universo permitido, usa hasta ~2 años de OHLCV cuando están disponibles, contexto multi-horizonte y noticias publicadas antes del cutoff. El futuro permanece oculto.</p>
+          <p class="eyebrow">Professional Replay v2.1</p>
+          <h2>El gráfico es la historia: tú haces avanzar el tiempo</h2>
+          <p class="body-copy">Hasta el cutoff sólo existe lo que ChatGPT podía conocer. Después tú revelas una sesión, una semana o un mes. La línea del eje derecho muestra cómo cambia su convicción de vender.</p>
         </div>
         <span class="blind-pill">FUTURO BLOQUEADO</span>
       </section>
@@ -66,26 +66,31 @@
           <span class="step-number">3</span>
           <p class="eyebrow">Aplicar</p>
           <h2>Seguir la sugerencia</h2>
-          <p class="body-copy">Simulamos literalmente la entrada propuesta. El futuro posterior continúa oculto.</p>
+          <p class="body-copy">Simulamos literalmente la entrada propuesta. Ninguna vela futura aparece todavía.</p>
           <button id="applyDecision" class="primary-button hidden" type="button">Aplicar sugerencia</button>
           <div id="applyResult" class="stage-result hidden"></div>
         </article>
 
-        <article class="card journey-step locked-step" id="followCard">
+        <article class="card journey-step locked-step timeline-step" id="followCard">
           <span class="step-number">4</span>
-          <p class="eyebrow">Gestionar</p>
-          <h2>¿Cambia de opinión con nueva información?</h2>
-          <p class="body-copy">Avanza una sesión cada vez. Cada fila fue calculada sin conocer lo que vino después.</p>
-          <button id="advanceDay" class="primary-button hidden" type="button">Avanzar un día</button>
+          <p class="eyebrow">Hacer correr el tiempo</p>
+          <h2 id="timelinePhaseTitle">Gestión de la posición</h2>
+          <p id="timelinePhaseCopy" class="body-copy">Cada avance revela sólo nuevas sesiones ya ocurridas. ChatGPT reevalúa la tesis y su convicción de vender queda dibujada sobre el mismo gráfico.</p>
+          <div id="timelineControls" class="time-controls hidden">
+            <button id="advanceDay" class="primary-button" type="button">+1 día</button>
+            <button id="advanceWeek" class="secondary-button" type="button">+1 semana</button>
+            <button id="advanceMonth" class="secondary-button" type="button">+1 mes</button>
+          </div>
+          <div id="timelineStatus" class="timeline-status hidden"></div>
           <div id="followResult" class="stage-result hidden"></div>
         </article>
 
         <article class="card journey-step locked-step" id="revealCard">
           <span class="step-number">5</span>
-          <p class="eyebrow">Comprobar</p>
-          <h2>¿Qué pasó realmente?</h2>
-          <p class="body-copy">Sólo aquí revelamos las velas futuras y calculamos el resultado de haber seguido a la IA.</p>
-          <button id="revealFuture" class="primary-button hidden" type="button">Ver qué pasó después</button>
+          <p class="eyebrow">Retrospectiva</p>
+          <h2>¿Fue realmente un buen momento para vender?</h2>
+          <p class="body-copy">Después del cruce del threshold puedes seguir haciendo correr el reloj. La decisión de venta queda congelada; lo nuevo es sólo evidencia retrospectiva.</p>
+          <button id="revealFuture" class="primary-button hidden" type="button">Mostrar todo el futuro disponible</button>
           <div id="revealResult" class="stage-result hidden"></div>
         </article>
       </section>
@@ -93,7 +98,7 @@
       <section id="professionalChartCard" class="card chart-card hidden">
         <div class="section-heading chart-heading">
           <div>
-            <p class="eyebrow">El gráfico que sustenta la decisión</p>
+            <p class="eyebrow">Timeline de mercado + ChatGPT</p>
             <h2 id="professionalChartTitle">—</h2>
             <p id="chartContextNote" class="small-muted">Tu ventana visual no limita el histórico analizado por la IA.</p>
           </div>
@@ -106,79 +111,46 @@
           </div>
         </div>
         <div class="chart-meta">
-          <span>Velas japonesas</span><span>Volumen</span><span id="chartRevealState">Sólo datos conocidos al cutoff</span>
+          <span>Velas + volumen</span>
+          <span>eje derecho: convicción de venta 0–100%</span>
+          <span>threshold: 80%</span>
+          <span id="chartRevealState">Sólo datos conocidos al cutoff</span>
         </div>
-        <div id="professionalChart" class="professional-chart" aria-label="Gráfico de velas profesional"></div>
+        <div id="professionalChart" class="professional-chart" aria-label="Gráfico de velas y convicción de venta"></div>
         <div id="chartLevels" class="level-strip"></div>
       </section>
 
       <section id="lessonCard" class="card lesson-card hidden">
-        <div class="section-heading">
-          <div><p class="eyebrow">Clase de ChatGPT</p><h2>Cómo llegó a esa conclusión</h2></div>
-        </div>
+        <div class="section-heading"><div><p class="eyebrow">Clase de ChatGPT</p><h2>Cómo llegó a esa conclusión</h2></div></div>
         <div class="lesson-grid">
           <article><h3>Por qué eligió este activo</h3><p id="lessonSelection"></p></article>
           <article><h3>Cómo leyó las velas</h3><p id="lessonChart"></p></article>
           <article><h3>Qué aportaron las noticias</h3><p id="lessonNews"></p></article>
           <article><h3>Qué podría invalidar la idea</h3><p id="lessonRisk"></p></article>
         </div>
-        <div class="evidence-block">
-          <h3>Fuentes que podía consultar</h3>
-          <div id="evidenceList" class="evidence-list"></div>
-        </div>
+        <div class="evidence-block"><h3>Fuentes que podía consultar</h3><div id="evidenceList" class="evidence-list"></div></div>
       </section>
 
-      <section class="card replay-note">
-        <strong>Aislamiento:</strong> todo lo que hagas aquí vive en `data/replay_v2/`. Nunca modifica las decisiones ni el capital de la cohorte forward.
-      </section>
+      <section class="card replay-note"><strong>Aislamiento:</strong> todo lo que hagas aquí vive en `data/replay_v2/`. Nunca modifica las decisiones ni el capital de la cohorte forward.</section>
     </section>
 
     <section id="livePanel" class="mode-panel hidden">
       <section class="card live-flow-card">
-        <div>
-          <p class="eyebrow">Modo en vivo</p>
-          <h2>El mismo principio, pero aquí no se puede adelantar el reloj</h2>
-          <p class="body-copy">El sistema analizará información disponible de verdad, decidirá y después esperaremos al mercado. El ledger oficial permanece separado de Replay.</p>
-        </div>
+        <div><p class="eyebrow">Modo en vivo</p><h2>El mismo principio, pero aquí no se puede adelantar el reloj</h2><p class="body-copy">El sistema analizará información disponible de verdad, decidirá y después esperaremos al mercado. El ledger oficial permanece separado de Replay.</p></div>
         <a class="primary-button link-button" href="https://github.com/ortiz-luis/ai-trading-forward-lab/actions/workflows/daily-decision.yml" target="_blank" rel="noopener noreferrer">Consultar a ChatGPT en vivo</a>
       </section>
-
       <section class="hero-grid">
         <article class="card hero-card"><span class="label">Empezamos con</span><strong id="startingCapital">€—</strong></article>
         <article class="card hero-card primary"><span class="label">Ahora tendríamos</span><strong id="currentEquity">€—</strong></article>
         <article class="card hero-card"><span class="label">Ganancia / pérdida</span><strong id="totalPnl">€—</strong></article>
       </section>
-
-      <section class="card latest-card">
-        <div class="section-heading"><div><p class="eyebrow">Última decisión</p><h2 id="latestTitle">Todavía no hay decisiones</h2></div><span id="latestBadge" class="decision-badge neutral">—</span></div>
-        <p id="latestThesis" class="body-copy">Cuando comience la cohorte oficial, aquí aparecerá la decisión más reciente y su explicación.</p>
-        <div id="latestMeta" class="meta-row"></div>
-      </section>
-
-      <section class="stats-grid">
-        <article class="card mini"><span>Aciertos</span><strong id="wins">0</strong></article>
-        <article class="card mini"><span>Fallos</span><strong id="losses">0</strong></article>
-        <article class="card mini"><span>No hizo nada</span><strong id="noTrades">0</strong></article>
-        <article class="card mini"><span>Decisiones</span><strong id="decisions">0</strong></article>
-      </section>
-
-      <section class="card chart-card">
-        <div class="section-heading"><div><p class="eyebrow">Capital simulado</p><h2>Evolución acumulada</h2></div></div>
-        <div class="chart-wrap"><svg id="equityChart" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Curva de capital"></svg></div>
-      </section>
-
-      <section class="two-col">
-        <article class="card"><div class="section-heading"><div><p class="eyebrow">Mientras no estuviste</p><h2>Últimos movimientos</h2></div></div><div id="whileAway" class="stack-list empty">Aún no hay historial.</div></article>
-        <article class="card"><div class="section-heading"><div><p class="eyebrow">Posiciones</p><h2>Abiertas ahora</h2></div></div><div id="positions" class="stack-list empty">No hay posiciones abiertas.</div></article>
-      </section>
-
-      <section class="card">
-        <div class="section-heading"><div><p class="eyebrow">Historial</p><h2>Decisiones recientes</h2></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Activo</th><th>Decisión</th><th>Resultado</th><th>P/L</th></tr></thead><tbody id="historyBody"><tr><td colspan="5">Aún no hay decisiones.</td></tr></tbody></table></div>
-      </section>
+      <section class="card latest-card"><div class="section-heading"><div><p class="eyebrow">Última decisión</p><h2 id="latestTitle">Todavía no hay decisiones</h2></div><span id="latestBadge" class="decision-badge neutral">—</span></div><p id="latestThesis" class="body-copy">Cuando comience la cohorte oficial, aquí aparecerá la decisión más reciente y su explicación.</p><div id="latestMeta" class="meta-row"></div></section>
+      <section class="stats-grid"><article class="card mini"><span>Aciertos</span><strong id="wins">0</strong></article><article class="card mini"><span>Fallos</span><strong id="losses">0</strong></article><article class="card mini"><span>No hizo nada</span><strong id="noTrades">0</strong></article><article class="card mini"><span>Decisiones</span><strong id="decisions">0</strong></article></section>
+      <section class="card chart-card"><div class="section-heading"><div><p class="eyebrow">Capital simulado</p><h2>Evolución acumulada</h2></div></div><div class="chart-wrap"><svg id="equityChart" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Curva de capital"></svg></div></section>
+      <section class="two-col"><article class="card"><div class="section-heading"><div><p class="eyebrow">Mientras no estuviste</p><h2>Últimos movimientos</h2></div></div><div id="whileAway" class="stack-list empty">Aún no hay historial.</div></article><article class="card"><div class="section-heading"><div><p class="eyebrow">Posiciones</p><h2>Abiertas ahora</h2></div></div><div id="positions" class="stack-list empty">No hay posiciones abiertas.</div></article></section>
+      <section class="card"><div class="section-heading"><div><p class="eyebrow">Historial</p><h2>Decisiones recientes</h2></div></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Activo</th><th>Decisión</th><th>Resultado</th><th>P/L</th></tr></thead><tbody id="historyBody"><tr><td colspan="5">Aún no hay decisiones.</td></tr></tbody></table></div></section>
     </section>
   </main>
-
   <script src="https://unpkg.com/lightweight-charts@4.2.2/dist/lightweight-charts.standalone.production.js"></script>
   <script src="app.js"></script>
 </body>
