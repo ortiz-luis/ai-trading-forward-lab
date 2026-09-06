@@ -12,6 +12,7 @@ from .automation import (
     mark_evaluation_success,
     record_system_error,
 )
+from .cohort import load_cohort, record_observation
 from .decision_contract import DecisionInput
 from .evaluator import EvaluationRules, PricePoint, evaluate_long_decision, to_evaluation_event
 from .ledger import append_decision, append_jsonl, make_decision_id, make_idempotency_key, stable_hash
@@ -22,6 +23,7 @@ DECISIONS = DATA_DIR / "decisions.jsonl"
 EVALUATIONS = DATA_DIR / "evaluations.jsonl"
 SYSTEM_EVENTS = DATA_DIR / "system_events.jsonl"
 HEALTH = DATA_DIR / "health.json"
+COHORT = DATA_DIR / "cohort_v1.json"
 
 
 def utc_now_iso() -> str:
@@ -43,6 +45,20 @@ def run_decision_cycle() -> int:
     session_date = _session_date()
     key = make_idempotency_key(session_date, "v1")
     if decision_already_exists(DECISIONS, session_date=session_date):
+        return 0
+
+    try:
+        cohort = load_cohort(COHORT)
+    except Exception as exc:
+        record_system_error(
+            SYSTEM_EVENTS,
+            kind="DATA_ERROR",
+            message=f"decision cycle blocked: invalid/missing cohort freeze: {type(exc).__name__}: {exc}",
+        )
+        return 0
+    if cohort.status != "STARTED":
+        # ARMED_NOT_STARTED is a normal safe state, not an error. The authenticated
+        # start-cohort workflow performs the one-way start transition.
         return 0
 
     required = ["OPENAI_API_KEY", "ALPACA_API_KEY", "ALPACA_API_SECRET"]
@@ -73,13 +89,13 @@ def run_decision_cycle() -> int:
             protocol=raw["protocol"],
             market=raw["market"],
             evidence=raw["evidence"],
-            model_identifier=os.getenv("OPENAI_MODEL") or None,
+            model_identifier=cohort.model,
         )
         instructions = Path("prompts/trading_v1.md").read_text(encoding="utf-8")
 
         from .providers.openai_decision import OpenAIDecisionProvider
 
-        provider = OpenAIDecisionProvider()
+        provider = OpenAIDecisionProvider(model=cohort.model)
         result = provider.decide(input_data, instructions=instructions)
         if not result.ok or result.decision is None:
             record_system_error(
@@ -105,11 +121,12 @@ def run_decision_cycle() -> int:
             stop_pct=out.stop_pct,
             thesis=out.thesis,
             counter_thesis=out.counter_thesis,
-            prompt_version="trading-v1",
+            prompt_version=cohort.prompt_version,
             model=result.model,
             sources_hash=stable_hash({"sources": list(out.sources)}),
         )
         append_decision(DECISIONS, event)
+        record_observation(COHORT)
         mark_decision_success(HEALTH, at=now)
         return 0
     except Exception as exc:
