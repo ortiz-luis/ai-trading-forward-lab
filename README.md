@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 35% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 40%.**
+> **Current progress: 40% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 45%.**
 
 ## Product goal
 
@@ -20,25 +20,6 @@ Build a low-friction hobby project that keeps running while the user is away: sc
 - Unattended AI uses OpenAI API, not browser automation of chatgpt.com.
 - Each cohort freezes prompt, universe, sizing, timing and evaluation rules before observation #1.
 - Work advances in exact **5% gates** and stops until the user says `sigue`.
-
-## Target architecture
-
-```text
-GitHub Pages
-     ↑ generated public data
-GitHub Actions scheduler / manual dispatch
-     ↓
-Python engine
-  ├─ Market data adapter
-  ├─ Context builder
-  ├─ OpenAI Responses API
-  ├─ Schema validator
-  ├─ Portfolio rules
-  ├─ Append-only immutable ledger
-  └─ Deterministic evaluator
-     ↓
-Git-versioned state → Pages rebuild
-```
 
 # Master implementation plan — 0% → 100%
 
@@ -73,45 +54,39 @@ A block is complete only when its acceptance criteria pass.
 ## 20% → 25% — Market-data provider abstraction ✅
 - [x] Stable `MarketDataProvider` protocol.
 - [x] Deterministic fixture provider for offline tests.
-- [x] Selected **Alpaca Market Data API** as first real external adapter while keeping provider independence.
-- [x] Normalized quote and candle timestamp models.
-- [x] Sanitized audit-snapshot writer.
-- [x] Explicit `MissingMarketData`, `StaleMarketData` and `MarketClosed` failure states.
-- [x] Tradeability guard rejects stale or closed-market quotes.
-- [x] Tests cover deterministic fixtures, missing/stale/closed/fresh data and candle validation.
-- [x] Provider decision documented in `docs/MARKET_DATA_PROVIDER.md`.
+- [x] Selected Alpaca Market Data API as first real external adapter while keeping provider independence.
+- [x] Normalized quote/candle models and sanitized audit snapshots.
+- [x] Fail-closed handling for missing/stale/closed-market data.
 
 ## 25% → 30% — Real market-data adapter ✅
-- [x] Implement Alpaca adapter using environment/GitHub Secret credentials.
-- [x] Retrieve latest quotes and 1-minute bars through official Alpaca market-data endpoints.
-- [x] Normalize provider timestamps, symbols and currencies into v1 models.
-- [x] Add timeout, bounded exponential retry and explicit 429 rate-limit handling.
-- [x] Add normalized provider health state (`HEALTHY`, `DEGRADED`, `UNAVAILABLE`).
-- [x] Ensure credentials travel only in request headers and never in normalized observations/output.
-- [x] Add safe manual probe `python -m engine.providers.alpaca_probe`.
-- [x] Add network-simulated tests for quote/bar normalization, auth failure, rate-limit retries and secret isolation.
-- [x] Document setup and failure semantics in `docs/ALPACA_MARKET_DATA.md`.
+- [x] Alpaca adapter via environment/GitHub Secret credentials.
+- [x] Latest quotes and bars normalized to v1 models.
+- [x] Timeout, bounded retry, rate-limit/auth/network handling.
+- [x] Provider health state and safe manual probe.
+- [x] Secret-isolation and network-simulated tests.
 
 ## 30% → 35% — Trading protocol v1 ✅
-- [x] Freeze initial liquid US-equity universe; SPY reserved as benchmark.
-- [x] Freeze long-only, no leverage, no shorts/options/futures/CFDs/crypto.
-- [x] Freeze max 3 open positions, max 15% equity per position and max 45% total exposure.
-- [x] Freeze BUY sizing floor, no-pyramiding rule and full-position SELL semantics.
-- [x] Freeze stop bounds (-1% to -5%, -2% reference) and 2–10 trading-day horizon (5-day reference).
-- [x] Freeze forward-only entry semantics: first eligible price after locked decision timestamp.
-- [x] Freeze SPY as same-window trade and portfolio benchmark.
-- [x] Define `NO_TRADE` as first-class output for weak/contradictory evidence, invalid conditions or non-tradeable data.
-- [x] Add machine-readable `TradingProtocol` + `PROTOCOL_V1` validation guards.
-- [x] Add tests for universe, sizing, stop/horizon and NO_TRADE constraints.
-- [x] Document protocol in `docs/TRADING_PROTOCOL_V1.md`.
+- [x] Freeze liquid US-equity universe; SPY reserved as benchmark.
+- [x] Long-only, no leverage, no shorts/options/futures/CFDs/crypto.
+- [x] Max 3 open positions, 15% equity per position, 45% total exposure.
+- [x] BUY sizing floor, no pyramiding, full-position SELL semantics.
+- [x] Stop bounds -1% to -5%; 2–10 trading-day horizon.
+- [x] Forward-only entry semantics and SPY same-window benchmark.
+- [x] Explicit `NO_TRADE` conditions.
+- [x] Machine-readable protocol and validation tests.
 
-**Acceptance:** protocol v1 is represented both in human-readable documentation and deterministic code. Decisions outside the frozen universe, sizing, stop or horizon bounds fail closed before any AI integration. Future changes require a new protocol/cohort version rather than rewriting v1 history.
+## 35% → 40% — OpenAI decision contract ✅
+- [x] Versioned prompt template in `prompts/trading_v1.txt`.
+- [x] Strict structured-output schema with `additionalProperties=false` semantics.
+- [x] Input contract carries cutoff, portfolio, protocol, market context and bounded evidence.
+- [x] Output contract requires action, symbol, simulated notional, confidence, horizon, stop, thesis, counter-thesis and used sources.
+- [x] Post-cutoff information explicitly prohibited in prompt; invented prices/sources/events prohibited.
+- [x] `NO_TRADE` is first-class and has strict null/zero semantics.
+- [x] Prompt version and model identifier are carried in the request context.
+- [x] Offline fixtures cover BUY, HOLD, SELL, NO_TRADE and fail-closed invalid/extra-field paths.
+- [x] Output validation is additionally checked against frozen Trading Protocol v1 bounds.
 
-## 35% → 40% — OpenAI decision contract
-- [ ] `prompts/trading_v1.md` + strict structured-output schema.
-- [ ] Portfolio/cutoff/context input; thesis/counter-thesis/confidence/sources output.
-- [ ] Prohibit post-cutoff information; first-class `NO_TRADE`.
-- [ ] Prompt/model versions and fixtures.
+**Acceptance:** an AI response is either an exact structured decision satisfying the frozen protocol or it fails closed before entering the immutable ledger. No OpenAI network call exists yet in this gate.
 
 ## 40% → 45% — OpenAI API integration
 - [ ] Official SDK behind `DecisionProvider`.
@@ -191,4 +166,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**35% complete.** Trading protocol v1 is frozen in documentation and machine-readable validation code: liquid US equities, long-only/no leverage, hard sizing/exposure limits, forward-only entry semantics, bounded stop/horizon rules, SPY benchmark and explicit NO_TRADE conditions. Next block is **35% → 40%: OpenAI decision contract**.
+**40% complete.** The OpenAI-facing decision boundary is frozen and testable offline: versioned prompt, cutoff-aware input, strict schema, protocol validation, explicit NO_TRADE semantics, source fields, prompt/model versioning and fixtures for every action. Next block is **40% → 45%: OpenAI API integration**.
