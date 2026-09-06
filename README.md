@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 20% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 25%.**
+> **Current progress: 25% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 30%.**
 
 ## Product goal
 
@@ -40,27 +40,6 @@ Python engine
 Git-versioned state → Pages rebuild
 ```
 
-## Repository structure
-
-```text
-app/
-engine/
-  cli.py
-  commands.py
-  config.py
-  schemas.py
-  ledger.py
-  portfolio.py
-  providers/
-data/
-prompts/
-tests/
-docs/
-.github/workflows/
-pyproject.toml
-README.md
-```
-
 # Master implementation plan — 0% → 100%
 
 A block is complete only when its acceptance criteria pass.
@@ -71,58 +50,53 @@ A block is complete only when its acceptance criteria pass.
 - [x] Simulation-only boundary and 5% stop/go cadence.
 - [x] Architecture baseline and initial skeleton.
 
-**Acceptance:** another session can recover goal, architecture, boundaries and next task from the repo alone.
-
 ## 5% → 10% — Executable Python skeleton ✅
 - [x] `pyproject.toml`, Python 3.11+, importable `engine`.
 - [x] Offline `decide`, `evaluate`, `rebuild` interfaces.
 - [x] Deterministic config, smoke tests and WSL/CI command.
 
-**Acceptance:** `python -m pytest` passes offline; prior reconstructed run: **4 passed**.
-
 ## 10% → 15% — Event schemas and immutable ledger ✅
-- [x] Strict `DecisionEvent` schema.
-- [x] Strict `EvaluationEvent` schema.
-- [x] Strict system/error event schema.
+- [x] Strict decision/evaluation/system schemas.
 - [x] UTC canonical storage + Europe/Paris display conversion.
-- [x] Append-only canonical JSONL reader/writer.
-- [x] Stable deterministic `decision_id` and idempotency key.
-- [x] SHA-256 locked payload hash.
-- [x] Tests for round-trip, duplicate rejection, strict unknown-field rejection, NO_TRADE invariants and mutation detection.
-
-**Acceptance:** event fixtures validate/round-trip; locked decisions detect payload mutation and duplicate IDs are rejected. Runtime network clone could not be used in this session, so the repository contains the acceptance tests to be executed by the established offline test command before any later production gate.
+- [x] Append-only canonical JSONL ledger.
+- [x] Stable IDs/idempotency and SHA-256 locked payload hash.
+- [x] Mutation/duplicate/round-trip tests.
 
 ## 15% → 20% — Portfolio accounting engine ✅
 - [x] Starting simulated capital (€1,000 default/configurable).
-- [x] Cash, equity, open positions, realized/unrealized P&L fields.
+- [x] Cash, equity, positions, realized/unrealized P&L fields.
 - [x] BUY/HOLD/SELL/NO_TRADE transitions.
-- [x] No leverage, non-negative cash, per-position/total-exposure/open-position limits.
-- [x] Rebuild portfolio entirely from immutable decision ledger events.
-- [x] Accounting invariant tests, including direct rebuild vs ledger rebuild equivalence.
+- [x] No leverage, non-negative cash and hard exposure limits.
+- [x] Rebuild portfolio from immutable decision ledger.
+- [x] Accounting invariant tests.
 
-**Acceptance:** portfolio state is deterministic and serializable; rebuilding from the ledger yields the same state as replaying the same events in memory. At this stage positions are carried at cost, so unrealized P&L is explicitly zero until the later market-data/evaluator gates introduce mark-to-market prices.
+## 20% → 25% — Market-data provider abstraction ✅
+- [x] Stable `MarketDataProvider` protocol.
+- [x] Deterministic fixture provider for offline tests.
+- [x] Selected **Alpaca Market Data API** as first real external adapter while keeping provider independence.
+- [x] Normalized quote and candle timestamp models.
+- [x] Sanitized audit-snapshot writer.
+- [x] Explicit `MissingMarketData`, `StaleMarketData` and `MarketClosed` failure states.
+- [x] Tradeability guard rejects stale or closed-market quotes.
+- [x] Tests cover deterministic fixtures, missing/stale/closed/fresh data and candle validation.
+- [x] Provider decision documented in `docs/MARKET_DATA_PROVIDER.md`.
 
-## 20% → 25% — Market-data provider abstraction
-- [ ] `MarketDataProvider` interface + deterministic fixture provider.
-- [ ] Select first external provider.
-- [ ] Quote/candle timestamp model and audit cache.
-- [ ] Explicit stale/missing/closed-market behavior.
-
-**Acceptance:** fixture input is deterministic and stale data cannot create a trade.
+**Acceptance:** fixture inputs produce deterministic normalized observations; missing/stale/closed-market data fails closed and cannot be treated as a tradeable quote. No external network/API call is introduced in this gate.
 
 ## 25% → 30% — Real market-data adapter
-- [ ] External adapter via environment secret.
-- [ ] Small allowed universe; normalized symbols/timestamps/currencies.
-- [ ] Retry/rate-limit and health handling; no persisted secrets.
+- [ ] Implement Alpaca adapter using environment/GitHub Secret credentials.
+- [ ] Retrieve latest quotes/bars for a small allowed US-equity universe.
+- [ ] Normalize provider timestamps, symbols and currencies into v1 models.
+- [ ] Add timeout, bounded retry and explicit rate-limit handling.
+- [ ] Add provider health state.
+- [ ] Persist only sanitized observations; never credentials/headers.
 
-**Acceptance:** sanitized timestamped snapshot or explicit failure.
+**Acceptance:** manual network run yields a sanitized timestamped snapshot or an explicit clean failure.
 
 ## 30% → 35% — Trading protocol v1
 - [ ] Freeze universe, long-only/no-leverage constraints and position limits.
 - [ ] Freeze sizing/exposure, horizon/stop, entry/exit and benchmark rules.
 - [ ] Define `NO_TRADE` conditions.
-
-**Acceptance:** deterministic implementations agree on allowed actions/outcomes.
 
 ## 35% → 40% — OpenAI decision contract
 - [ ] `prompts/trading_v1.md` + strict structured-output schema.
@@ -130,93 +104,67 @@ A block is complete only when its acceptance criteria pass.
 - [ ] Prohibit post-cutoff information; first-class `NO_TRADE`.
 - [ ] Prompt/model versions and fixtures.
 
-**Acceptance:** every fixture validates exactly or fails closed.
-
 ## 40% → 45% — OpenAI API integration
 - [ ] Official SDK behind `DecisionProvider`.
 - [ ] Key only from environment/GitHub Secret.
 - [ ] Timeout/bounded retry, one controlled repair, explicit `AI_ERROR`.
 - [ ] Cost metadata where available; failure never becomes `NO_TRADE`.
 
-**Acceptance:** schema-valid decision or explicit failure, never ambiguous free text.
-
 ## 45% → 50% — Context and evidence pipeline
 - [ ] Evidence object with URL/source/publication/retrieval times.
 - [ ] Prioritize primary sources; bounded recent-news/search context.
 - [ ] Prevent stale evidence appearing current; persist evidence manifest.
-
-**Acceptance:** every decision can show evidence available at cutoff.
 
 ## 50% → 55% — Deterministic evaluator
 - [ ] Entry, stop, expiry and SELL rules.
 - [ ] Configurable costs/slippage; gross/net P&L and benchmark.
 - [ ] Evaluation event never alters decision event.
 
-**Acceptance:** fixtures yield verified win/loss/stop/expiry outcomes.
-
 ## 55% → 60% — Scoring and statistics
 - [ ] Human-readable points; wins/losses/no-trades/errors separately.
 - [ ] Equity, benchmark, drawdown and confidence calibration.
 - [ ] Points never substitute monetary P&L.
 
-**Acceptance:** all statistics reproduce from ledger + observations.
-
 ## 60% → 65% — GitHub Actions automation core
 - [ ] Daily schedule + `workflow_dispatch`.
-- [ ] Timezone-aware actual timestamp, concurrency guard and idempotency.
+- [ ] Timezone-aware timestamp, concurrency guard and idempotency.
 - [ ] Controlled decision/validation/persistence/tests pipeline.
-
-**Acceptance:** repeated same-day execution cannot duplicate a decision.
 
 ## 65% → 70% — Evaluation automation and resilience
 - [ ] Periodic unattended evaluator and bounded retries.
 - [ ] `DATA_ERROR`, `AI_ERROR`, `DEPLOY_ERROR`, `health.json`.
 - [ ] Preserve prior site on failed build; synthetic multi-day test.
 
-**Acceptance:** injected failures do not corrupt state.
-
 ## 70% → 75% — Public-data build layer
-- [ ] Sanitized dashboard JSON, no secret serialization.
-- [ ] “Mientras no estuviste”, current portfolio, equity series, latest cards.
+- [ ] Sanitized dashboard JSON and no secret serialization.
+- [ ] “Mientras no estuviste”, current portfolio, equity series and latest cards.
 - [ ] Secret-pattern scan.
-
-**Acceptance:** public artifacts contain everything UI needs and nothing secret.
 
 ## 75% → 80% — Beginner-first GitHub Pages UI
 - [ ] Responsive home page.
 - [ ] Hero: starting money → current money → gain/loss.
-- [ ] Simple latest decision, open positions, green/red/neutral history.
+- [ ] Simple latest decision, positions and green/red/neutral history.
 - [ ] “Mientras no estuviste” + one cumulative equity chart.
-
-**Acceptance:** first-time user understands what happened in under 10 seconds.
 
 ## 80% → 85% — Pages deployment and manual interaction
 - [ ] Official Pages deployment and correct base path.
 - [ ] Authorized manual “request a decision now”.
 - [ ] Health/update status, mobile/desktop and HTTPS validation.
 
-**Acceptance:** public site works without exposing credentials.
-
 ## 85% → 90% — Optional Alpaca Paper shadow execution
 - [ ] Paper-only broker adapter and credentials.
 - [ ] Mirror eligible simulated orders and reconcile fills.
 - [ ] Never overwrite internal ledger; hard-block live endpoint.
 
-**Acceptance:** Alpaca Paper is optional and internal truth remains reproducible.
-
 ## 90% → 95% — Hardening and experiment freeze
-- [ ] Secret scan, failure injection, rebuild-from-zero, duplicate schedule test.
+- [ ] Secret scan, failure injection, rebuild-from-zero and duplicate schedule test.
 - [ ] Dependency/recovery policy.
-- [ ] Freeze cohort prompt/protocol/provider/model and create checkpoint tag.
-
-**Acceptance:** no known path silently edits history, exposes keys, spends unbounded API budget or trades from missing data.
+- [ ] Freeze cohort prompt/protocol/provider/model and checkpoint tag.
 
 ## 95% → 100% — Start forward cohort v1
 - [ ] Initialize official simulated €1,000 cohort.
 - [ ] Generate observation #1 prospectively and verify timestamp/evidence/hash/UI.
 - [ ] Verify unattended evaluator and document frozen start configuration.
-
-**Acceptance:** experiment can run for days without the user and honestly answer what ChatGPT would have done and how much money would remain.
 
 # Future gate: real money — outside this 0–100 plan
 
@@ -234,4 +182,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**20% complete.** Deterministic simulated portfolio accounting is in place, including replay from the immutable decision ledger and hard exposure constraints. Next block is **20% → 25%: Market-data provider abstraction**.
+**25% complete.** The engine now has an external-provider-independent market-data contract, deterministic offline fixtures, quote/candle temporal models, sanitized audit snapshots and fail-closed handling for missing/stale/closed data. Alpaca Market Data is selected as the first real adapter. Next block is **25% → 30%: Real market-data adapter**.
