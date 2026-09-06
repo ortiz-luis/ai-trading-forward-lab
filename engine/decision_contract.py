@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .schemas import Action
+from .schemas import Action, DecisionEvent
 from .protocol import PROTOCOL_V1
 
 PROMPT_VERSION = "trading-v1"
@@ -12,15 +12,8 @@ DECISION_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "required": [
-        "action",
-        "symbol",
-        "notional_eur",
-        "confidence",
-        "horizon_days",
-        "stop_pct",
-        "thesis",
-        "counter_thesis",
-        "sources",
+        "action", "symbol", "notional_eur", "confidence", "horizon_days",
+        "stop_pct", "thesis", "counter_thesis", "sources",
     ],
     "properties": {
         "action": {"type": "string", "enum": [a.value for a in Action]},
@@ -54,6 +47,7 @@ class DecisionInput:
     protocol: dict[str, Any]
     market: dict[str, Any]
     evidence: list[dict[str, Any]]
+    model_identifier: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,10 +94,6 @@ class DecisionOutput:
             if not isinstance(source["url"], str) or not source["url"].strip():
                 raise ValueError("source url is required")
 
-        # Convert the structured response into the same immutable event-level
-        # constraints enforced elsewhere. Equity is fixed at the cohort default
-        # here; the runtime pipeline will supply current equity before locking.
-        from .schemas import DecisionEvent
         event = DecisionEvent(
             decision_id="contract-validation",
             idempotency_key="contract-validation",
@@ -134,4 +124,5 @@ def build_prompt_input(input_data: DecisionInput) -> dict[str, Any]:
         "market": input_data.market,
         "evidence": input_data.evidence,
         "prompt_version": PROMPT_VERSION,
+        "model_identifier": input_data.model_identifier,
     }
