@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .ledger import read_jsonl
+from .protocol import PROTOCOL_V1, TradingProtocol
 from .schemas import Action, DecisionEvent, EvaluationEvent
 
 
@@ -29,7 +30,6 @@ class EffectivePortfolio:
 
     @property
     def equity_eur(self) -> float:
-        # Open positions remain at cost until a later mark-to-market layer exists.
         return self.cash_eur + self.exposure_eur
 
     def to_dict(self) -> dict[str, object]:
@@ -49,6 +49,29 @@ class EffectivePortfolio:
                 for symbol, row in sorted(self.positions.items())
             },
         }
+
+
+def validate_decision_against_effective_portfolio(
+    event: DecisionEvent,
+    portfolio: EffectivePortfolio,
+    *,
+    protocol: TradingProtocol = PROTOCOL_V1,
+) -> None:
+    protocol.validate_decision(event, current_equity_eur=portfolio.equity_eur)
+    if event.action == Action.BUY:
+        assert event.symbol is not None
+        if event.symbol in portfolio.positions:
+            raise ValueError("pyramiding/existing symbol is forbidden")
+        if len(portfolio.positions) >= protocol.max_open_positions:
+            raise ValueError("max_open_positions reached")
+        if event.notional_eur > portfolio.cash_eur + 1e-9:
+            raise ValueError("insufficient effective cash")
+        if portfolio.exposure_eur + event.notional_eur > portfolio.equity_eur * protocol.max_total_exposure_pct + 1e-9:
+            raise ValueError("BUY would exceed total exposure limit")
+    elif event.action in {Action.HOLD, Action.SELL}:
+        assert event.symbol is not None
+        if event.symbol not in portfolio.positions:
+            raise ValueError(f"{event.action.value} requires an effective open position")
 
 
 def _ts(value: str) -> datetime:
@@ -112,7 +135,6 @@ def rebuild_effective_portfolio(
             assert isinstance(event, EvaluationEvent)
             original = decision_by_id[event.decision_id]
             if original.action != Action.BUY or not original.symbol:
-                # Evaluation results are meaningful for opened positions in v1.
                 continue
             position = positions.get(original.symbol)
             if position is not None and position.decision_id == original.decision_id:
@@ -120,7 +142,6 @@ def rebuild_effective_portfolio(
                 cash += position.notional_eur + event.net_pnl_eur
                 realized += event.net_pnl_eur
             elif original.decision_id in sold_pending_evaluation:
-                # SELL already restored cost basis; evaluation contributes only P&L.
                 cash += event.net_pnl_eur
                 realized += event.net_pnl_eur
                 sold_pending_evaluation.remove(original.decision_id)
