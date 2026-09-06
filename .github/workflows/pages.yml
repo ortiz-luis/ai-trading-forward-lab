@@ -39,9 +39,12 @@ jobs:
       - name: Assemble Pages artifact
         run: |
           rm -rf _site
-          mkdir -p _site/data
+          mkdir -p _site/data/replay
           cp app/index.html app/styles.css app/app.js _site/
           cp data/public/dashboard.json _site/data/dashboard.json
+          if [ -f data/replay/index.json ]; then
+            cp data/replay/index.json _site/data/replay/index.json
+          fi
       - uses: actions/configure-pages@v5
         with:
           enablement: true
