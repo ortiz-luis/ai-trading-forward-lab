@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 30% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 35%.**
+> **Current progress: 35% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 40%.**
 
 ## Product goal
 
@@ -81,8 +81,6 @@ A block is complete only when its acceptance criteria pass.
 - [x] Tests cover deterministic fixtures, missing/stale/closed/fresh data and candle validation.
 - [x] Provider decision documented in `docs/MARKET_DATA_PROVIDER.md`.
 
-**Acceptance:** fixture inputs produce deterministic normalized observations; missing/stale/closed-market data fails closed and cannot be treated as a tradeable quote. No external network/API call is introduced in this gate.
-
 ## 25% → 30% — Real market-data adapter ✅
 - [x] Implement Alpaca adapter using environment/GitHub Secret credentials.
 - [x] Retrieve latest quotes and 1-minute bars through official Alpaca market-data endpoints.
@@ -94,12 +92,20 @@ A block is complete only when its acceptance criteria pass.
 - [x] Add network-simulated tests for quote/bar normalization, auth failure, rate-limit retries and secret isolation.
 - [x] Document setup and failure semantics in `docs/ALPACA_MARKET_DATA.md`.
 
-**Acceptance:** with valid environment credentials the safe probe is designed to produce a sanitized SPY quote/bar snapshot; without credentials it fails closed with an explicit normalized error. No credential or raw request header is persisted or printed. Live network verification is intentionally deferred until credentials are supplied through WSL/GitHub Secrets; the adapter itself is fully isolated behind the provider contract.
+## 30% → 35% — Trading protocol v1 ✅
+- [x] Freeze initial liquid US-equity universe; SPY reserved as benchmark.
+- [x] Freeze long-only, no leverage, no shorts/options/futures/CFDs/crypto.
+- [x] Freeze max 3 open positions, max 15% equity per position and max 45% total exposure.
+- [x] Freeze BUY sizing floor, no-pyramiding rule and full-position SELL semantics.
+- [x] Freeze stop bounds (-1% to -5%, -2% reference) and 2–10 trading-day horizon (5-day reference).
+- [x] Freeze forward-only entry semantics: first eligible price after locked decision timestamp.
+- [x] Freeze SPY as same-window trade and portfolio benchmark.
+- [x] Define `NO_TRADE` as first-class output for weak/contradictory evidence, invalid conditions or non-tradeable data.
+- [x] Add machine-readable `TradingProtocol` + `PROTOCOL_V1` validation guards.
+- [x] Add tests for universe, sizing, stop/horizon and NO_TRADE constraints.
+- [x] Document protocol in `docs/TRADING_PROTOCOL_V1.md`.
 
-## 30% → 35% — Trading protocol v1
-- [ ] Freeze universe, long-only/no-leverage constraints and position limits.
-- [ ] Freeze sizing/exposure, horizon/stop, entry/exit and benchmark rules.
-- [ ] Define `NO_TRADE` conditions.
+**Acceptance:** protocol v1 is represented both in human-readable documentation and deterministic code. Decisions outside the frozen universe, sizing, stop or horizon bounds fail closed before any AI integration. Future changes require a new protocol/cohort version rather than rewriting v1 history.
 
 ## 35% → 40% — OpenAI decision contract
 - [ ] `prompts/trading_v1.md` + strict structured-output schema.
@@ -185,4 +191,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**30% complete.** The provider-independent market layer now has a real Alpaca implementation with environment-only credentials, normalized latest quotes/bars, bounded retries, explicit rate-limit/auth/network failures, provider health and a sanitized manual probe. Next block is **30% → 35%: Trading protocol v1**.
+**35% complete.** Trading protocol v1 is frozen in documentation and machine-readable validation code: liquid US equities, long-only/no leverage, hard sizing/exposure limits, forward-only entry semantics, bounded stop/horizon rules, SPY benchmark and explicit NO_TRADE conditions. Next block is **35% → 40%: OpenAI decision contract**.
