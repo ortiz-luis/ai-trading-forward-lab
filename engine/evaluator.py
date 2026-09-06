@@ -48,38 +48,49 @@ def evaluate_long_decision(
     asset_prices: Sequence[PricePoint],
     benchmark_prices: Sequence[PricePoint],
     rules: EvaluationRules | None = None,
+    explicit_sell_index: int | None = None,
 ) -> EvaluationResult:
+    """Evaluate a locked BUY using only forward price points.
+
+    Price point 0 is the first eligible post-cutoff entry observation. The exit is
+    the first stop hit, an explicit later SELL index if supplied, or otherwise the
+    final point supplied for the frozen horizon. Benchmark uses the identical
+    entry/exit indices.
+    """
     active = rules or EvaluationRules()
     active.validate()
     decision.validate()
     if decision.action.value != "BUY":
-        raise ValueError("deterministic evaluator currently evaluates BUY decisions")
-    if len(asset_prices) < 2 or len(benchmark_prices) < 2:
-        raise ValueError("at least entry and exit prices are required")
+        raise ValueError("deterministic evaluator evaluates locked BUY decisions")
+    if len(asset_prices) < 2 or len(benchmark_prices) < len(asset_prices):
+        raise ValueError("aligned entry/exit asset and benchmark prices are required")
+    if explicit_sell_index is not None and not (1 <= explicit_sell_index < len(asset_prices)):
+        raise ValueError("explicit_sell_index must reference a post-entry price point")
 
     for point in (*asset_prices, *benchmark_prices):
         point.validate()
 
-    entry_raw = asset_prices[0].price
-    entry = _effective_price(entry_raw, active.slippage_bps, side="buy")
+    entry = _effective_price(asset_prices[0].price, active.slippage_bps, side="buy")
     stop_price = entry * (1 + (decision.stop_pct or 0.0))
 
-    exit_raw = asset_prices[-1].price
-    exit_reason = "horizon"
-    for point in asset_prices[1:]:
+    planned_exit_index = explicit_sell_index if explicit_sell_index is not None else len(asset_prices) - 1
+    exit_index = planned_exit_index
+    exit_reason = "explicit_sell" if explicit_sell_index is not None else "horizon"
+
+    for index, point in enumerate(asset_prices[1:planned_exit_index + 1], start=1):
         if decision.stop_pct is not None and point.price <= stop_price:
-            exit_raw = point.price
+            exit_index = index
             exit_reason = "stop"
             break
 
-    exit_price = _effective_price(exit_raw, active.slippage_bps, side="sell")
+    exit_price = _effective_price(asset_prices[exit_index].price, active.slippage_bps, side="sell")
     quantity = decision.notional_eur / entry
     gross_pnl = quantity * (exit_price - entry)
     costs = decision.notional_eur * (active.simulated_cost_bps / 10000.0) * 2
     net_pnl = gross_pnl - costs
 
     b0 = benchmark_prices[0].price
-    b1 = benchmark_prices[-1].price
+    b1 = benchmark_prices[exit_index].price
     benchmark_return_pct = ((b1 / b0) - 1) * 100.0
 
     return EvaluationResult(
