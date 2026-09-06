@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .portfolio import rebuild_portfolio_from_ledger
+from .effective_portfolio import rebuild_effective_portfolio_from_ledgers
 from .schemas import DecisionEvent, EvaluationEvent
 from .ledger import read_jsonl
 from .statistics import build_statistics
@@ -58,10 +57,11 @@ def build_public_dashboard(
     evaluations = _load_evaluations(evaluations_path) if evaluations_path.exists() else []
     evaluation_by_decision = {row.decision_id: row for row in evaluations}
 
-    portfolio = rebuild_portfolio_from_ledger(
+    portfolio = rebuild_effective_portfolio_from_ledgers(
         decisions_path,
+        evaluations_path,
         starting_capital_eur=starting_capital_eur,
-    ) if decisions_path.exists() else None
+    )
 
     no_trades = sum(d.action.value == "NO_TRADE" for d in decisions)
     stats = build_statistics(
@@ -109,8 +109,12 @@ def build_public_dashboard(
             "errors": stats.errors,
         },
         "latest_decision": _decision_card(decisions[-1]) if decisions else None,
-        "open_positions": [] if portfolio is None else [
-            {"symbol": symbol, "notional_eur": position.notional_eur}
+        "open_positions": [
+            {
+                "symbol": symbol,
+                "decision_id": position.decision_id,
+                "notional_eur": position.notional_eur,
+            }
             for symbol, position in sorted(portfolio.positions.items())
         ],
         "equity_series": equity_series,
