@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Iterable
 
+from .ledger import read_jsonl
 from .schemas import Action, DecisionEvent
 
 
@@ -66,6 +68,19 @@ class PortfolioState:
         if self.exposure_eur > self.equity_eur * rules.max_total_exposure_pct + 1e-9:
             raise ValueError("total exposure exceeds max_total_exposure_pct")
 
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "starting_capital_eur": self.starting_capital_eur,
+            "cash_eur": self.cash_eur,
+            "equity_eur": self.equity_eur,
+            "exposure_eur": self.exposure_eur,
+            "realized_pnl_eur": self.realized_pnl_eur,
+            "positions": {
+                symbol: asdict(position)
+                for symbol, position in sorted(self.positions.items())
+            },
+        }
+
 
 def apply_decision(state: PortfolioState, event: DecisionEvent, rules: PortfolioRules) -> PortfolioState:
     """Apply an accounting-only decision transition.
@@ -109,7 +124,7 @@ def apply_decision(state: PortfolioState, event: DecisionEvent, rules: Portfolio
             raise ValueError("SELL must use notional_eur=0 until evaluator supplies exit proceeds")
         position = next_state.positions.pop(event.symbol)
         next_state.cash_eur += position.notional_eur
-    else:  # defensive future-proofing
+    else:
         raise ValueError(f"unsupported action: {event.action}")
 
     next_state.validate(rules)
@@ -128,3 +143,17 @@ def rebuild_portfolio(
     for event in decisions:
         state = apply_decision(state, event, active_rules)
     return state
+
+
+def rebuild_portfolio_from_ledger(
+    path: str | Path,
+    *,
+    starting_capital_eur: float = 1000.0,
+    rules: PortfolioRules | None = None,
+) -> PortfolioState:
+    decisions = [DecisionEvent.from_dict(row) for row in read_jsonl(path)]
+    return rebuild_portfolio(
+        decisions,
+        starting_capital_eur=starting_capital_eur,
+        rules=rules,
+    )
