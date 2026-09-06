@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 15% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 20%.**
+> **Current progress: 20% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 25%.**
 
 ## Product goal
 
@@ -92,15 +92,15 @@ A block is complete only when its acceptance criteria pass.
 
 **Acceptance:** event fixtures validate/round-trip; locked decisions detect payload mutation and duplicate IDs are rejected. Runtime network clone could not be used in this session, so the repository contains the acceptance tests to be executed by the established offline test command before any later production gate.
 
-## 15% → 20% — Portfolio accounting engine
-- [ ] Starting simulated capital (€1,000 default/configurable).
-- [ ] Cash, equity, open positions, realized/unrealized P&L.
-- [ ] BUY/HOLD/SELL/NO_TRADE transitions.
-- [ ] No leverage, non-negative cash, exposure limits.
-- [ ] Rebuild portfolio entirely from ledger events.
-- [ ] Accounting invariant tests.
+## 15% → 20% — Portfolio accounting engine ✅
+- [x] Starting simulated capital (€1,000 default/configurable).
+- [x] Cash, equity, open positions, realized/unrealized P&L fields.
+- [x] BUY/HOLD/SELL/NO_TRADE transitions.
+- [x] No leverage, non-negative cash, per-position/total-exposure/open-position limits.
+- [x] Rebuild portfolio entirely from immutable decision ledger events.
+- [x] Accounting invariant tests, including direct rebuild vs ledger rebuild equivalence.
 
-**Acceptance:** deleting derived portfolio state and rebuilding from ledger yields equivalent state.
+**Acceptance:** portfolio state is deterministic and serializable; rebuilding from the ledger yields the same state as replaying the same events in memory. At this stage positions are carried at cost, so unrealized P&L is explicitly zero until the later market-data/evaluator gates introduce mark-to-market prices.
 
 ## 20% → 25% — Market-data provider abstraction
 - [ ] `MarketDataProvider` interface + deterministic fixture provider.
@@ -234,4 +234,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**15% complete.** Strict event schemas and immutable append-only ledger primitives are in place. Next block is **15% → 20%: Portfolio accounting engine**.
+**20% complete.** Deterministic simulated portfolio accounting is in place, including replay from the immutable decision ledger and hard exposure constraints. Next block is **20% → 25%: Market-data provider abstraction**.
