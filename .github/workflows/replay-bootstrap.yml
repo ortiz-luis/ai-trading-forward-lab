@@ -1,0 +1,64 @@
+name: Build blind historical replays
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'engine/replay_generator.py'
+      - 'tests/test_replay_generator.py'
+      - '.github/workflows/replay-bootstrap.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ai-trading-replay
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
+
+      - name: Test before replay generation
+        run: python -m pytest -q
+
+      - name: Generate five blind historical replay sessions
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
+        run: python -m engine.replay_generator
+
+      - name: Assert forward ledger stayed untouched
+        run: |
+          git diff --exit-code -- data/decisions.jsonl data/evaluations.jsonl data/cohort_v1.json || {
+            echo 'Replay generation attempted to modify forward state.'
+            exit 1
+          }
+
+      - name: Persist replay-only artifact
+        run: |
+          if git diff --quiet -- data/replay/; then
+            echo 'Replay artifact unchanged.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/replay/index.json
+          git commit -m 'replay: refresh blind historical sessions'
+          git pull --rebase origin main
+          git push origin HEAD:main
