@@ -1,0 +1,30 @@
+{
+  "advanced": {
+    "benchmark_return_pct_mean": 0.0,
+    "max_drawdown_pct": 0.0,
+    "score_points": 0
+  },
+  "counts": {
+    "breakeven": 0,
+    "decisions": 0,
+    "errors": 0,
+    "losses": 0,
+    "no_trades": 0,
+    "wins": 0
+  },
+  "current_equity_eur": 1000.0,
+  "equity_series": [
+    {
+      "equity_eur": 1000.0,
+      "index": 0
+    }
+  ],
+  "health": {},
+  "history": [],
+  "latest_decision": null,
+  "open_positions": [],
+  "simulation_only": true,
+  "starting_capital_eur": 1000.0,
+  "total_net_pnl_eur": 0.0,
+  "while_away": []
+}
