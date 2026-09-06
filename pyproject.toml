@@ -15,8 +15,8 @@ dev = ["pytest>=8.0"]
 [project.scripts]
 ai-trading-lab = "engine.cli:main"
 
-[tool.setuptools]
-packages = ["engine"]
+[tool.setuptools.packages.find]
+include = ["engine*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
