@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 import re
 from pathlib import Path
@@ -40,6 +41,37 @@ def _decision_card(event: DecisionEvent) -> dict[str, Any]:
     }
 
 
+def _prehistory_baseline(*, anchor_at: str | None, equity_eur: float, points: int = 10) -> list[dict[str, Any]]:
+    """Return a visual-only flat baseline before the forward cohort.
+
+    These points intentionally carry no simulated performance. They exist only so
+    the dashboard has historical visual context before observation #1. They are
+    excluded from all counts, P&L and scoring.
+    """
+    if points < 1:
+        return []
+    if anchor_at:
+        anchor = datetime.fromisoformat(anchor_at.replace("Z", "+00:00")).astimezone(timezone.utc)
+    else:
+        anchor = datetime.now(timezone.utc)
+    cursor = anchor.date() - timedelta(days=1)
+    days = []
+    while len(days) < points:
+        if cursor.weekday() < 5:
+            days.append(cursor)
+        cursor -= timedelta(days=1)
+    days.reverse()
+    return [
+        {
+            "index": idx,
+            "at": f"{day.isoformat()}T20:00:00Z",
+            "equity_eur": equity_eur,
+            "phase": "PREHISTORY",
+        }
+        for idx, day in enumerate(days)
+    ]
+
+
 def build_public_dashboard(
     *,
     decisions_path: str | Path,
@@ -71,10 +103,11 @@ def build_public_dashboard(
         errors=0,
     )
 
+    anchor_at = decisions[0].decision_at if decisions else None
+    equity_series = _prehistory_baseline(anchor_at=anchor_at, equity_eur=starting_capital_eur)
     equity = starting_capital_eur
-    equity_series = [{"index": 0, "equity_eur": equity}]
     history: list[dict[str, Any]] = []
-    for idx, decision in enumerate(decisions, start=1):
+    for decision in decisions:
         evaluation = evaluation_by_decision.get(decision.decision_id)
         pnl = evaluation.net_pnl_eur if evaluation else None
         if pnl is not None:
@@ -89,7 +122,12 @@ def build_public_dashboard(
             "net_pnl_eur": pnl,
             "result": "WIN" if pnl is not None and pnl > 0 else "LOSS" if pnl is not None and pnl < 0 else "FLAT" if pnl == 0 else "OPEN" if decision.action.value != "NO_TRADE" else "NO_TRADE",
         })
-        equity_series.append({"index": idx, "equity_eur": equity})
+        equity_series.append({
+            "index": len(equity_series),
+            "at": decision.decision_at,
+            "equity_eur": equity,
+            "phase": "FORWARD",
+        })
 
     health = {}
     if health_path.exists():
@@ -118,6 +156,7 @@ def build_public_dashboard(
             for symbol, position in sorted(portfolio.positions.items())
         ],
         "equity_series": equity_series,
+        "equity_series_note": "PREHISTORY points are a flat visual baseline only; forward performance begins with the first official decision.",
         "history": history[-30:],
         "while_away": history[-7:],
         "health": {
