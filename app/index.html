@@ -12,84 +12,179 @@
       <div>
         <p class="eyebrow">AI Trading Forward Lab</p>
         <h1>¿Qué habría hecho ChatGPT con €1.000 ficticios?</h1>
-        <p class="subtitle">Experimento forward-only. Sin dinero real, sin leverage y sin reescribir decisiones pasadas.</p>
+        <p class="subtitle">Juega con el pasado sin mirar el futuro, o sigue la cohorte real cuando el mercado esté abierto.</p>
       </div>
       <div class="status-column">
         <div id="statusPill" class="status-pill">Cargando…</div>
-        <div id="lastUpdated" class="small-muted">Esperando primera actualización</div>
-        <a class="manual-link" href="https://github.com/ortiz-luis/ai-trading-forward-lab/actions/workflows/daily-decision.yml" target="_blank" rel="noopener noreferrer">Pedir una decisión manual</a>
+        <div id="lastUpdated" class="small-muted">Esperando actualización</div>
       </div>
     </header>
 
-    <section class="hero-grid">
-      <article class="card hero-card">
-        <span class="label">Empezamos con</span>
-        <strong id="startingCapital">€—</strong>
-      </article>
-      <article class="card hero-card primary">
-        <span class="label">Ahora tendríamos</span>
-        <strong id="currentEquity">€—</strong>
-      </article>
-      <article class="card hero-card">
-        <span class="label">Ganancia / pérdida</span>
-        <strong id="totalPnl">€—</strong>
-      </article>
-    </section>
+    <nav class="mode-switch" aria-label="Modo de funcionamiento">
+      <button id="replayModeButton" class="mode-button active" type="button">Replay histórico</button>
+      <button id="liveModeButton" class="mode-button" type="button">En vivo</button>
+    </nav>
 
-    <section class="card latest-card">
-      <div class="section-heading">
+    <section id="replayPanel" class="mode-panel">
+      <section class="card replay-intro">
         <div>
-          <p class="eyebrow">Última decisión</p>
-          <h2 id="latestTitle">Todavía no hay decisiones</h2>
+          <p class="eyebrow">Modo laboratorio</p>
+          <h2>Viaja a un día pasado y no mires el futuro</h2>
+          <p class="body-copy">ChatGPT recibió únicamente datos disponibles hasta el cutoff elegido. La respuesta ya fue generada de forma blindada; los botones de abajo reproducen el tiempo paso a paso.</p>
         </div>
-        <span id="latestBadge" class="decision-badge neutral">—</span>
-      </div>
-      <p id="latestThesis" class="body-copy">Cuando comience la cohorte oficial, aquí aparecerá la decisión más reciente y su explicación.</p>
-      <div id="latestMeta" class="meta-row"></div>
+        <span class="blind-pill">FUTURO OCULTO</span>
+      </section>
+
+      <section class="replay-controls card">
+        <div class="control-group">
+          <label for="replayDate">Día que quieres recrear</label>
+          <select id="replayDate"></select>
+        </div>
+        <div class="control-group">
+          <label for="replaySymbol">Gráfico que vio ChatGPT</label>
+          <select id="replaySymbol"></select>
+        </div>
+        <div class="control-group compact-control">
+          <span>Ventana</span>
+          <div class="range-switch">
+            <button id="range1w" type="button">1W</button>
+            <button id="range1m" type="button" class="active">1M</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card context-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Lo que ChatGPT podía ver</p>
+            <h2 id="replayChartTitle">Mercado hasta el cutoff</h2>
+          </div>
+          <span id="replayCutoff" class="small-muted">—</span>
+        </div>
+        <div class="chart-wrap replay-chart-wrap">
+          <svg id="replayChart" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Contexto histórico"></svg>
+        </div>
+        <div class="chart-legend"><span class="legend-past">Datos visibles</span><span id="futureLegend" class="legend-future hidden">Datos revelados después</span></div>
+      </section>
+
+      <section class="replay-step-grid">
+        <article class="card step-card">
+          <span class="step-number">1</span>
+          <p class="eyebrow">Consulta</p>
+          <h2>Preguntarle a ChatGPT</h2>
+          <p>La respuesta está sellada desde el cutoff. Al pulsar, sólo la revelamos.</p>
+          <button id="askReplay" class="primary-button" type="button">Consultar a ChatGPT</button>
+        </article>
+
+        <article id="decisionStep" class="card step-card locked-step">
+          <span class="step-number">2</span>
+          <p class="eyebrow">Sugerencia</p>
+          <h2 id="replayDecisionTitle">Esperando consulta</h2>
+          <div id="replayDecisionBody" class="step-content">Todavía no sabes qué eligió.</div>
+          <button id="applyReplay" class="primary-button hidden" type="button">Aplicar sugerencia</button>
+        </article>
+
+        <article id="applyStep" class="card step-card locked-step">
+          <span class="step-number">3</span>
+          <p class="eyebrow">Apertura siguiente</p>
+          <h2 id="replayApplyTitle">Aún no aplicada</h2>
+          <div id="replayApplyBody" class="step-content">El precio de apertura sigue oculto.</div>
+          <button id="revealReplay" class="primary-button hidden" type="button">Ver qué pasó después</button>
+        </article>
+
+        <article id="resultStep" class="card step-card locked-step">
+          <span class="step-number">4</span>
+          <p class="eyebrow">Resultado</p>
+          <h2 id="replayResultTitle">Futuro oculto</h2>
+          <div id="replayResultBody" class="step-content">Aquí aparecerá el cierre siguiente y cuánto habría cambiado el capital.</div>
+        </article>
+      </section>
+
+      <section class="card replay-note">
+        <strong>Importante:</strong> este modo nunca escribe en el ledger forward. Sirve para aprender la interfaz y probar el protocolo sin contaminar el experimento que empieza en vivo.
+      </section>
     </section>
 
-    <section class="stats-grid">
-      <article class="card mini"><span>Aciertos</span><strong id="wins">0</strong></article>
-      <article class="card mini"><span>Fallos</span><strong id="losses">0</strong></article>
-      <article class="card mini"><span>No hizo nada</span><strong id="noTrades">0</strong></article>
-      <article class="card mini"><span>Decisiones</span><strong id="decisions">0</strong></article>
-    </section>
-
-    <section class="card chart-card">
-      <div class="section-heading">
+    <section id="livePanel" class="mode-panel hidden">
+      <section class="card live-flow-card">
         <div>
-          <p class="eyebrow">Capital simulado</p>
-          <h2>Evolución acumulada</h2>
+          <p class="eyebrow">Modo en vivo</p>
+          <h2>La misma lógica, pero aquí el futuro de verdad no existe todavía</h2>
+          <p class="body-copy">El scheduler toma una decisión automáticamente en una sesión válida. Para pedir una ahora manualmente, usamos GitHub Actions para que la API key nunca quede expuesta en esta página pública.</p>
         </div>
-      </div>
-      <div class="chart-wrap"><svg id="equityChart" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Curva de capital"></svg></div>
-    </section>
+        <a class="primary-button link-button" href="https://github.com/ortiz-luis/ai-trading-forward-lab/actions/workflows/daily-decision.yml" target="_blank" rel="noopener noreferrer">Consultar a ChatGPT en vivo</a>
+      </section>
 
-    <section class="two-col">
-      <article class="card">
-        <div class="section-heading"><div><p class="eyebrow">Mientras no estuviste</p><h2>Últimos movimientos</h2></div></div>
-        <div id="whileAway" class="stack-list empty">Aún no hay historial.</div>
-      </article>
-      <article class="card">
-        <div class="section-heading"><div><p class="eyebrow">Posiciones</p><h2>Abiertas ahora</h2></div></div>
-        <div id="positions" class="stack-list empty">No hay posiciones abiertas.</div>
-      </article>
-    </section>
+      <section class="hero-grid">
+        <article class="card hero-card">
+          <span class="label">Empezamos con</span>
+          <strong id="startingCapital">€—</strong>
+        </article>
+        <article class="card hero-card primary">
+          <span class="label">Ahora tendríamos</span>
+          <strong id="currentEquity">€—</strong>
+        </article>
+        <article class="card hero-card">
+          <span class="label">Ganancia / pérdida</span>
+          <strong id="totalPnl">€—</strong>
+        </article>
+      </section>
 
-    <section class="card">
-      <div class="section-heading"><div><p class="eyebrow">Historial</p><h2>Decisiones recientes</h2></div></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Fecha</th><th>Activo</th><th>Decisión</th><th>Resultado</th><th>P/L</th></tr></thead>
-          <tbody id="historyBody"><tr><td colspan="5">Aún no hay decisiones.</td></tr></tbody>
-        </table>
-      </div>
-    </section>
+      <section class="card latest-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Última decisión</p>
+            <h2 id="latestTitle">Todavía no hay decisiones</h2>
+          </div>
+          <span id="latestBadge" class="decision-badge neutral">—</span>
+        </div>
+        <p id="latestThesis" class="body-copy">Cuando comience la cohorte oficial, aquí aparecerá la decisión más reciente y su explicación.</p>
+        <div id="latestMeta" class="meta-row"></div>
+      </section>
 
-    <details class="card advanced-card">
-      <summary>Métricas avanzadas</summary>
-      <div id="advanced" class="advanced-grid"></div>
-    </details>
+      <section class="stats-grid">
+        <article class="card mini"><span>Aciertos</span><strong id="wins">0</strong></article>
+        <article class="card mini"><span>Fallos</span><strong id="losses">0</strong></article>
+        <article class="card mini"><span>No hizo nada</span><strong id="noTrades">0</strong></article>
+        <article class="card mini"><span>Decisiones</span><strong id="decisions">0</strong></article>
+      </section>
+
+      <section class="card chart-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Capital simulado</p>
+            <h2>Evolución acumulada</h2>
+          </div>
+        </div>
+        <div class="chart-wrap"><svg id="equityChart" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Curva de capital"></svg></div>
+      </section>
+
+      <section class="two-col">
+        <article class="card">
+          <div class="section-heading"><div><p class="eyebrow">Mientras no estuviste</p><h2>Últimos movimientos</h2></div></div>
+          <div id="whileAway" class="stack-list empty">Aún no hay historial.</div>
+        </article>
+        <article class="card">
+          <div class="section-heading"><div><p class="eyebrow">Posiciones</p><h2>Abiertas ahora</h2></div></div>
+          <div id="positions" class="stack-list empty">No hay posiciones abiertas.</div>
+        </article>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><div><p class="eyebrow">Historial</p><h2>Decisiones recientes</h2></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Activo</th><th>Decisión</th><th>Resultado</th><th>P/L</th></tr></thead>
+            <tbody id="historyBody"><tr><td colspan="5">Aún no hay decisiones.</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <details class="card advanced-card">
+        <summary>Métricas avanzadas</summary>
+        <div id="advanced" class="advanced-grid"></div>
+      </details>
+    </section>
   </main>
   <script src="app.js"></script>
 </body>
