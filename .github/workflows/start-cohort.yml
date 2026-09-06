@@ -1,0 +1,93 @@
+name: Start official forward cohort v1
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ai-trading-state
+  cancel-in-progress: false
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e '.[dev]'
+
+      - name: Acceptance tests before start
+        run: python -m pytest
+
+      - name: Build fresh forward-only runtime context
+        env:
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
+        run: python -m engine.runtime_context
+
+      - name: Perform one-way cohort start transition
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        run: python -m engine.cohort_start
+
+      - name: Generate prospective observation number 1
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
+        run: python -m engine.automation_runner decision
+
+      - name: Rebuild public dashboard
+        run: |
+          python - <<'PY'
+          from engine.public_data import build_public_dashboard
+          build_public_dashboard(
+              decisions_path='data/decisions.jsonl',
+              evaluations_path='data/evaluations.jsonl',
+              health_path='data/health.json',
+              output_path='data/public/dashboard.json',
+          )
+          PY
+
+      - name: Verify observation number 1 exists and is counted
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from engine.cohort import load_cohort
+          from engine.ledger import read_jsonl
+          cohort = load_cohort()
+          rows = list(read_jsonl(Path('data/decisions.jsonl')))
+          assert cohort.status == 'STARTED'
+          assert cohort.observation_count == 1
+          assert len(rows) == 1
+          assert rows[0]['locked_payload_hash']
+          print('official observation #1 verified')
+          PY
+
+      - name: Acceptance tests after observation number 1
+        run: python -m pytest
+
+      - name: Persist official start state
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/
+          git commit -m 'cohort: start forward-v1 with observation 1'
+          git pull --rebase origin main
+          git push origin HEAD:main
