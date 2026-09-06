@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -55,6 +56,10 @@ class CohortFreeze:
             raise ValueError("frozen component SHA cannot be empty")
 
 
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
 def load_cohort(path: str | Path = "data/cohort_v1.json") -> CohortFreeze:
     cohort = CohortFreeze.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
     cohort.validate()
@@ -81,3 +86,24 @@ def validate_start_prerequisites(
     if missing:
         raise CohortStartBlocked("required runtime secrets are unavailable: " + ", ".join(missing))
     return cohort
+
+
+def start_cohort(
+    *,
+    cohort_path: str | Path = "data/cohort_v1.json",
+    runtime_context_path: str | Path = "data/runtime_context.json",
+    decisions_path: str | Path = "data/decisions.jsonl",
+    env: dict[str, str] | None = None,
+    started_at: str | None = None,
+) -> CohortFreeze:
+    cohort = validate_start_prerequisites(
+        cohort_path=cohort_path,
+        runtime_context_path=runtime_context_path,
+        decisions_path=decisions_path,
+        env=env,
+    )
+    started = replace(cohort, status="STARTED", started_at=started_at or utc_now_iso())
+    started.validate()
+    target = Path(cohort_path)
+    target.write_text(json.dumps(asdict(started), sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return started
