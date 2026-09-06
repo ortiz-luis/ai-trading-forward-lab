@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 60% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 70%.**
+> **Current progress: 70% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 80%.**
 
 ## Product goal
 
@@ -19,7 +19,7 @@ Build a low-friction hobby project that keeps running while the user is away: sc
 - GitHub Pages = public UI; GitHub Actions = scheduled execution.
 - Unattended AI uses OpenAI API, not browser automation of chatgpt.com.
 - Each cohort freezes prompt, universe, sizing, timing, evidence and evaluation rules before observation #1.
-- From the 50% checkpoint onward, work advances in exact **10% gates** and stops until the user says `sigue`.
+- Work advances in exact **10% gates** and stops until the user says `sigue`.
 
 # Master implementation plan — 0% → 100%
 
@@ -53,35 +53,35 @@ A block is complete only when its acceptance criteria pass.
 - [x] Strict JSON schema, bounded timeout/retries and one repair attempt.
 - [x] Explicit `AI_ERROR`; failure never becomes `NO_TRADE`.
 - [x] Timestamped evidence records with primary-source priority.
-- [x] Bounded context, freshness rules and post-cutoff rejection.
-- [x] Hashed evidence manifest for later audit.
+- [x] Bounded context, freshness rules, post-cutoff rejection and hashed evidence manifest.
 
 ## 50% → 60% — Deterministic evaluator + experiment statistics ✅
-- [x] Forward-only entry uses the first eligible post-cutoff price supplied to the evaluator.
-- [x] Stop handling closes at the first qualifying forward price point.
-- [x] Horizon expiry closes at the frozen final observation.
-- [x] Explicit SELL closure supported via a specified later price index; stop has priority if hit first.
-- [x] Configurable simulated transaction cost and slippage assumptions.
-- [x] Gross P&L, net P&L and SPY benchmark calculated over the same entry/exit window.
-- [x] Evaluation is emitted as a separate `EvaluationEvent`; original locked decision is never edited.
-- [x] Statistics track wins, losses, breakeven, NO_TRADE and errors separately.
-- [x] Cumulative simulated equity and maximum drawdown are reproducible from evaluation events.
-- [x] Mean benchmark return and confidence calibration (Brier score) are available.
-- [x] Secondary game score exists but monetary P&L/equity remain the primary truth.
-- [x] Acceptance fixtures cover horizon win, stop loss, explicit SELL, costs, benchmark alignment, drawdown and calibration.
+- [x] Forward-only entry, stop, horizon and explicit SELL semantics.
+- [x] Configurable simulated transaction costs/slippage.
+- [x] Gross/net P&L and same-window SPY benchmark.
+- [x] Evaluation events never alter locked decisions.
+- [x] Wins/losses/breakeven/NO_TRADE/errors tracked separately.
+- [x] Reproducible equity, drawdown, benchmark, game score and confidence calibration.
+- [x] Acceptance fixtures for win/loss/stop/SELL/costs/benchmark/drawdown/calibration.
 
-**Acceptance:** deterministic fixtures define mathematically reproducible outcomes from locked decisions and forward price paths. The same evaluation events reproduce monetary P&L, equity, drawdown and summary statistics without manual totals. The repository contains the acceptance tests; no claim is made here that a live/network test was required for this offline gate.
+## 60% → 70% — GitHub Actions automation + resilience ✅
+- [x] Daily scheduled decision workflow at 16:17 Europe/Paris, Monday–Friday.
+- [x] Authenticated manual `workflow_dispatch` on decision and evaluation workflows.
+- [x] Periodic evaluation workflow at minute 47 each hour, Monday–Friday.
+- [x] Shared `ai-trading-state` concurrency group prevents simultaneous state writes.
+- [x] Date/protocol idempotency prevents duplicate same-session decisions.
+- [x] Controlled sanitized-context → OpenAI → strict validation → immutable decision persistence adapter.
+- [x] Controlled evaluation-input → deterministic evaluator → append-only evaluation persistence adapter.
+- [x] Test suite runs before and after scheduled cycles.
+- [x] Runtime credentials are supplied only through GitHub Secrets/environment.
+- [x] Only sanitized `data/` state is committed; workflows rebase before push.
+- [x] Explicit `DATA_ERROR`, `AI_ERROR`, `DEPLOY_ERROR` event infrastructure and `health.json`.
+- [x] Prior successful timestamps remain intact after later failures.
+- [x] Synthetic tests cover same-session idempotency, missing secrets, repeated evaluation, health-state persistence and multi-day injected failures.
+- [x] Package discovery corrected so `engine.*` subpackages install consistently in fresh Actions environments.
+- [x] Automation/failure semantics documented in `docs/AUTOMATION_AND_RESILIENCE.md`.
 
-## 60% → 70% — GitHub Actions automation + resilience
-- [ ] Daily scheduled workflow + authenticated `workflow_dispatch`.
-- [ ] Timezone-aware actual timestamp, concurrency guard and date/session idempotency.
-- [ ] Controlled context → AI → validation → persistence → tests pipeline.
-- [ ] Periodic unattended evaluator with bounded retries.
-- [ ] Explicit `DATA_ERROR`, `AI_ERROR`, `DEPLOY_ERROR` and `health.json`.
-- [ ] Preserve prior public site/state on failed build.
-- [ ] Synthetic multi-day unattended failure test.
-
-**Acceptance:** repeated same-day execution cannot duplicate a decision, and injected provider/API failures do not corrupt history or derived state.
+**Acceptance:** the unattended control plane is deterministic and fail-closed: repeated same-session runs cannot duplicate a decision; failures are recorded explicitly instead of fabricating a trade; decision/evaluation state writes are serialized. The official forward cohort has not started yet. Until later gates generate the finalized runtime context and public artifacts, automation is allowed to stop safely rather than create unauditable data. Pages deployment remains separate so a future deployment failure cannot rewrite ledger history.
 
 ## 70% → 80% — Public-data layer + beginner-first UI
 - [ ] Sanitized dashboard JSON; no secret/environment serialization.
@@ -129,4 +129,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**60% complete.** Locked decisions can now be evaluated deterministically against forward price paths, including stop/horizon/explicit SELL behavior, costs and same-window SPY benchmarking. The resulting evaluation events reproduce equity, P&L, drawdown, counts, game score and confidence calibration. Next block is **60% → 70%: GitHub Actions automation + resilience**.
+**70% complete.** The project now has a scheduled, manual-triggerable, serialized and fail-closed automation layer for simulated decisions and evaluations, plus explicit health/error state and idempotency. Next block is **70% → 80%: Public-data layer + beginner-first UI**.
