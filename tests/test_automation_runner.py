@@ -25,15 +25,41 @@ def _decision_payload():
     ).to_dict()
 
 
+def _started_cohort_payload():
+    return {
+        "cohort_id": "forward-v1",
+        "status": "STARTED",
+        "starting_capital_eur": 1000.0,
+        "protocol_version": "v1",
+        "prompt_version": "trading-v1",
+        "model": "gpt-5.6-terra",
+        "market_provider": "alpaca-market-data",
+        "evidence_policy": {"max_items": 12},
+        "decision_schedule": "16:17 Monday-Friday",
+        "timezone": "Europe/Paris",
+        "frozen_components": {
+            "prompt": "a", "protocol": "b", "evidence": "c",
+            "openai_provider": "d", "market_provider": "e", "evaluator": "f",
+        },
+        "started_at": "2026-09-07T13:00:00Z",
+        "observation_count": 0,
+    }
+
+
 def _redirect_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(automation_runner, "DATA_DIR", tmp_path)
     monkeypatch.setattr(automation_runner, "DECISIONS", tmp_path / "decisions.jsonl")
     monkeypatch.setattr(automation_runner, "EVALUATIONS", tmp_path / "evaluations.jsonl")
     monkeypatch.setattr(automation_runner, "SYSTEM_EVENTS", tmp_path / "system_events.jsonl")
     monkeypatch.setattr(automation_runner, "HEALTH", tmp_path / "health.json")
+    monkeypatch.setattr(automation_runner, "COHORT", tmp_path / "cohort_v1.json")
 
 
-def test_decision_runner_skips_existing_session_before_secrets(monkeypatch, tmp_path):
+def _write_started_cohort(tmp_path):
+    (tmp_path / "cohort_v1.json").write_text(json.dumps(_started_cohort_payload()), encoding="utf-8")
+
+
+def test_decision_runner_skips_existing_session_before_cohort_or_secrets(monkeypatch, tmp_path):
     _redirect_paths(monkeypatch, tmp_path)
     monkeypatch.setenv("AITFL_SESSION_DATE", "2026-09-07")
     key = make_idempotency_key("2026-09-07", "v1")
@@ -42,8 +68,19 @@ def test_decision_runner_skips_existing_session_before_secrets(monkeypatch, tmp_
     assert not automation_runner.SYSTEM_EVENTS.exists()
 
 
+def test_armed_cohort_does_not_create_error_or_decision(monkeypatch, tmp_path):
+    _redirect_paths(monkeypatch, tmp_path)
+    armed = _started_cohort_payload()
+    armed.update({"status": "ARMED_NOT_STARTED", "started_at": None})
+    (tmp_path / "cohort_v1.json").write_text(json.dumps(armed), encoding="utf-8")
+    assert automation_runner.run_decision_cycle() == 0
+    assert not automation_runner.DECISIONS.exists()
+    assert not automation_runner.SYSTEM_EVENTS.exists()
+
+
 def test_missing_runtime_secrets_fail_closed(monkeypatch, tmp_path):
     _redirect_paths(monkeypatch, tmp_path)
+    _write_started_cohort(tmp_path)
     monkeypatch.setenv("AITFL_SESSION_DATE", "2026-09-08")
     for name in ("OPENAI_API_KEY", "ALPACA_API_KEY", "ALPACA_API_SECRET"):
         monkeypatch.delenv(name, raising=False)
