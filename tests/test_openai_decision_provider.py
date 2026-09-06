@@ -55,8 +55,8 @@ def input_fixture() -> DecisionInput:
     )
 
 
-def valid_buy_json() -> str:
-    return json.dumps({
+def valid_buy_payload():
+    return {
         "action": "BUY",
         "symbol": "META",
         "notional_eur": 100,
@@ -66,7 +66,11 @@ def valid_buy_json() -> str:
         "thesis": "fixture thesis",
         "counter_thesis": "fixture counter",
         "sources": [{"url": "https://example.com/source", "published_at": "2026-09-06T12:00:00Z"}],
-    })
+    }
+
+
+def valid_buy_json() -> str:
+    return json.dumps(valid_buy_payload())
 
 
 def test_valid_response_returns_decision_and_usage():
@@ -106,11 +110,20 @@ def test_two_failures_return_explicit_ai_error_not_no_trade():
 
 
 def test_protocol_invalid_output_fails_closed_after_single_repair():
-    invalid = json.loads(valid_buy_json())
+    invalid = valid_buy_payload()
     invalid["notional_eur"] = 999
     fake = FakeClient([FakeResponse(json.dumps(invalid)), FakeResponse(json.dumps(invalid))])
     provider = OpenAIDecisionProvider(client=fake)
     result = provider.decide(input_fixture(), instructions="fixture")
+    assert result.error_code == "AI_ERROR"
+    assert result.decision is None
+
+
+def test_invented_source_fails_closed_even_when_schema_is_valid():
+    invalid = valid_buy_payload()
+    invalid["sources"] = [{"url":"https://invented.example/news","published_at":"2026-09-06T12:00:00Z"}]
+    fake = FakeClient([FakeResponse(json.dumps(invalid)), FakeResponse(json.dumps(invalid))])
+    result = OpenAIDecisionProvider(client=fake).decide(input_fixture(), instructions="fixture")
     assert result.error_code == "AI_ERROR"
     assert result.decision is None
 
