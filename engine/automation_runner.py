@@ -14,6 +14,10 @@ from .automation import (
 )
 from .cohort import load_cohort, record_observation
 from .decision_contract import DecisionInput
+from .effective_portfolio import (
+    rebuild_effective_portfolio_from_ledgers,
+    validate_decision_against_effective_portfolio,
+)
 from .evaluator import EvaluationRules, PricePoint, evaluate_long_decision, to_evaluation_event
 from .ledger import append_decision, append_jsonl, make_decision_id, make_idempotency_key, stable_hash
 from .schemas import DecisionEvent
@@ -57,8 +61,6 @@ def run_decision_cycle() -> int:
         )
         return 0
     if cohort.status != "STARTED":
-        # ARMED_NOT_STARTED is a normal safe state, not an error. The authenticated
-        # start-cohort workflow performs the one-way start transition.
         return 0
 
     required = ["OPENAI_API_KEY", "ALPACA_API_KEY", "ALPACA_API_SECRET"]
@@ -108,6 +110,9 @@ def run_decision_cycle() -> int:
 
         out = result.decision
         now = utc_now_iso()
+        evidence_hash = raw.get("evidence_manifest_sha256")
+        if not isinstance(evidence_hash, str) or len(evidence_hash) != 64:
+            raise ValueError("runtime context lacks a valid evidence manifest hash")
         event = DecisionEvent(
             decision_id=make_decision_id(key),
             idempotency_key=key,
@@ -123,8 +128,14 @@ def run_decision_cycle() -> int:
             counter_thesis=out.counter_thesis,
             prompt_version=cohort.prompt_version,
             model=result.model,
-            sources_hash=stable_hash({"sources": list(out.sources)}),
+            sources_hash=evidence_hash,
         )
+        effective = rebuild_effective_portfolio_from_ledgers(
+            DECISIONS,
+            EVALUATIONS,
+            starting_capital_eur=cohort.starting_capital_eur,
+        )
+        validate_decision_against_effective_portfolio(event, effective)
         append_decision(DECISIONS, event)
         record_observation(COHORT)
         mark_decision_success(HEALTH, at=now)
