@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, TypeVar, Type
@@ -48,11 +48,21 @@ T = TypeVar("T")
 
 
 def _strict_kwargs(cls: Type[T], payload: dict[str, Any]) -> dict[str, Any]:
-    allowed = {f.name for f in fields(cls) if f.init}
+    if not isinstance(payload, dict):
+        raise ValueError("event payload must be an object")
+    init_fields = {f.name: f for f in fields(cls) if f.init}
+    allowed = set(init_fields)
     unknown = set(payload) - allowed - {"event_type"}
-    missing = {f.name for f in fields(cls) if f.init and f.default is f.default_factory and f.default_factory is field().default_factory}  # pragma: no cover
+    required = {
+        name
+        for name, f in init_fields.items()
+        if f.default is MISSING and f.default_factory is MISSING
+    }
+    missing = required - set(payload)
     if unknown:
         raise ValueError(f"unknown fields for {cls.__name__}: {sorted(unknown)}")
+    if missing:
+        raise ValueError(f"missing fields for {cls.__name__}: {sorted(missing)}")
     return {key: value for key, value in payload.items() if key in allowed}
 
 
