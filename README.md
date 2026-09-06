@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 70% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 80%.**
+> **Current progress: 80% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 90%.**
 
 ## Product goal
 
@@ -81,17 +81,18 @@ A block is complete only when its acceptance criteria pass.
 - [x] Package discovery corrected so `engine.*` subpackages install consistently in fresh Actions environments.
 - [x] Automation/failure semantics documented in `docs/AUTOMATION_AND_RESILIENCE.md`.
 
-**Acceptance:** the unattended control plane is deterministic and fail-closed: repeated same-session runs cannot duplicate a decision; failures are recorded explicitly instead of fabricating a trade; decision/evaluation state writes are serialized. The official forward cohort has not started yet. Until later gates generate the finalized runtime context and public artifacts, automation is allowed to stop safely rather than create unauditable data. Pages deployment remains separate so a future deployment failure cannot rewrite ledger history.
+## 70% → 80% — Public-data layer + beginner-first UI ✅
+- [x] Deterministic `engine/public_data.py` builder creates a sanitized dashboard payload from ledger/evaluations/health.
+- [x] Public JSON exposes only UI-safe fields; locked hashes, source hashes, raw headers, environment values and credentials are excluded.
+- [x] Secret-pattern scan fails closed before writing a publishable artifact.
+- [x] Public payload includes starting/current capital, cumulative P&L, counts, latest decision, open positions, equity series, recent history, “Mientras no estuviste”, health summary and secondary advanced metrics.
+- [x] Safe empty-state `data/public/dashboard.json` clearly represents a not-yet-started €1,000 simulation.
+- [x] Responsive beginner-first UI added under `app/` with hero capital cards, latest decision, simple win/loss/no-trade counts, cumulative equity chart, positions and recent history.
+- [x] Advanced metrics are secondary/collapsible and do not dominate the first view.
+- [x] UI reads only the public dashboard artifact and does not read ledgers, secrets or runtime environment.
+- [x] Tests cover normal public build, empty state, whitelist-only health fields and secret-pattern rejection.
 
-## 70% → 80% — Public-data layer + beginner-first UI
-- [ ] Sanitized dashboard JSON; no secret/environment serialization.
-- [ ] “Mientras no estuviste”, current portfolio, equity series and latest cards.
-- [ ] Secret-pattern scan of publishable artifacts.
-- [ ] Responsive home page.
-- [ ] Hero: starting money → current money → gain/loss.
-- [ ] Simple latest decision, positions, green/red/neutral history and cumulative equity chart.
-
-**Acceptance:** public artifacts contain everything the UI needs and nothing secret; a first-time user understands the experiment in under 10 seconds.
+**Acceptance:** publishable artifacts contain the information needed for the dashboard while excluding secret/internal fields. Before the official cohort starts, the UI truthfully shows €1,000 starting/current simulated capital and zero decisions instead of fake demo performance. The page layout is intentionally understandable from the first screen without requiring technical metrics.
 
 ## 80% → 90% — Pages deployment + optional Alpaca Paper shadow
 - [ ] Official Pages deployment and correct project base path.
@@ -129,4 +130,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**70% complete.** The project now has a scheduled, manual-triggerable, serialized and fail-closed automation layer for simulated decisions and evaluations, plus explicit health/error state and idempotency. Next block is **70% → 80%: Public-data layer + beginner-first UI**.
+**80% complete.** The project now has a safe public-data contract plus a responsive beginner-first dashboard that can already render the truthful pre-cohort empty state. Next block is **80% → 90%: Pages deployment + optional Alpaca Paper shadow**.
