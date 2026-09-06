@@ -49,9 +49,10 @@ function render(data){
   const pill=document.getElementById('statusPill');
   if(health.last_error_kind){ pill.textContent=`Atención: ${health.last_error_kind}`; }
   else { pill.textContent=data.simulation_only?'SIMULACIÓN · €0 real':'Estado disponible'; }
+  setText('lastUpdated', health.updated_at ? `Actualizado ${dateFmt(health.updated_at)}` : 'Esperando primera actualización');
 }
 
-fetch('../data/public/dashboard.json',{cache:'no-store'})
+fetch('./data/dashboard.json',{cache:'no-store'})
   .then(r=>{if(!r.ok) throw new Error(`HTTP ${r.status}`); return r.json();})
   .then(render)
   .catch(()=>{
