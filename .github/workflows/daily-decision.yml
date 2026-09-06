@@ -39,6 +39,22 @@ jobs:
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
         run: python -m engine.runtime_context
 
+      - name: Auto-start armed cohort on first valid market cycle
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        run: |
+          python - <<'PY'
+          from engine.cohort import load_cohort, start_cohort
+          cohort = load_cohort()
+          if cohort.status == 'ARMED_NOT_STARTED':
+              started = start_cohort()
+              print(f'cohort auto-started at {started.started_at}')
+          else:
+              print(f'cohort already {cohort.status}; no start transition needed')
+          PY
+
       - name: Run guarded simulated decision cycle
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
