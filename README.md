@@ -2,8 +2,8 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 40% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 45%.**
+> **Current progress: 45% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 50%.**
 
 ## Product goal
 
@@ -76,23 +76,32 @@ A block is complete only when its acceptance criteria pass.
 - [x] Machine-readable protocol and validation tests.
 
 ## 35% → 40% — OpenAI decision contract ✅
-- [x] Versioned prompt template in `prompts/trading_v1.txt`.
+- [x] Versioned prompt template in `prompts/trading_v1.md`.
 - [x] Strict structured-output schema with `additionalProperties=false` semantics.
 - [x] Input contract carries cutoff, portfolio, protocol, market context and bounded evidence.
 - [x] Output contract requires action, symbol, simulated notional, confidence, horizon, stop, thesis, counter-thesis and used sources.
-- [x] Post-cutoff information explicitly prohibited in prompt; invented prices/sources/events prohibited.
-- [x] `NO_TRADE` is first-class and has strict null/zero semantics.
-- [x] Prompt version and model identifier are carried in the request context.
-- [x] Offline fixtures cover BUY, HOLD, SELL, NO_TRADE and fail-closed invalid/extra-field paths.
-- [x] Output validation is additionally checked against frozen Trading Protocol v1 bounds.
+- [x] Post-cutoff information explicitly prohibited; invented prices/sources/events prohibited.
+- [x] `NO_TRADE` is first-class with strict null/zero semantics.
+- [x] Prompt version and requested model identifier are carried in context.
+- [x] Offline fixtures cover BUY, HOLD, SELL, NO_TRADE and invalid/extra-field paths.
+- [x] Output validation is checked against frozen Trading Protocol v1 bounds.
 
-**Acceptance:** an AI response is either an exact structured decision satisfying the frozen protocol or it fails closed before entering the immutable ledger. No OpenAI network call exists yet in this gate.
+## 40% → 45% — OpenAI API integration ✅
+- [x] Official `openai` Python SDK added as runtime dependency.
+- [x] `OpenAIDecisionProvider` implemented over the Responses API.
+- [x] API key is read only from `OPENAI_API_KEY` / runtime environment; missing key fails before network access.
+- [x] Default model is configurable via `OPENAI_MODEL` (current default `gpt-5.6-terra`).
+- [x] Responses use strict JSON-schema Structured Outputs and `store=false`.
+- [x] Timeout and bounded SDK retry configuration added.
+- [x] Exactly one application-level structured repair attempt is allowed.
+- [x] Double failure returns explicit `AI_ERROR` with `decision=None`; it never becomes `NO_TRADE`.
+- [x] Response ID, actual model and token usage metadata are captured when available.
+- [x] Safe synthetic manual probe added at `python -m engine.providers.openai_probe`.
+- [x] Fake-client tests cover valid result, usage metadata, repair, protocol-invalid output, missing key and dual failure.
+- [x] Integration/failure semantics documented in `docs/OPENAI_API_INTEGRATION.md`.
+- [x] Corrected the pre-existing `trading_protocol`/`protocol.py` import mismatch before closing this gate.
 
-## 40% → 45% — OpenAI API integration
-- [ ] Official SDK behind `DecisionProvider`.
-- [ ] Key only from environment/GitHub Secret.
-- [ ] Timeout/bounded retry, one controlled repair, explicit `AI_ERROR`.
-- [ ] Cost metadata where available; failure never becomes `NO_TRADE`.
+**Acceptance:** the code path is wired to the official Responses API and can return only a schema-valid protocol-compliant simulated decision or explicit `AI_ERROR`. A live request is intentionally deferred until an API key is supplied outside the repository; no secret is required or stored to complete the code integration gate.
 
 ## 45% → 50% — Context and evidence pipeline
 - [ ] Evidence object with URL/source/publication/retrieval times.
@@ -166,4 +175,4 @@ No automatic promotion to live trading. A separate design review is required aft
 
 ## Current checkpoint
 
-**40% complete.** The OpenAI-facing decision boundary is frozen and testable offline: versioned prompt, cutoff-aware input, strict schema, protocol validation, explicit NO_TRADE semantics, source fields, prompt/model versioning and fixtures for every action. Next block is **40% → 45%: OpenAI API integration**.
+**45% complete.** The simulation-only decision contract is now connected to the official OpenAI Responses API behind a secret-safe provider with strict Structured Outputs, bounded retries, a single repair attempt, explicit AI_ERROR semantics and usage metadata. Next block is **45% → 50%: Context and evidence pipeline**.
