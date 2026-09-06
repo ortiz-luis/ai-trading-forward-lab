@@ -7,8 +7,11 @@ on:
     paths:
       - 'engine/replay_professional.py'
       - 'engine/replay_professional_runner.py'
+      - 'engine/replay_validation.py'
       - 'prompts/replay_professional_v2.md'
       - 'tests/test_replay_professional.py'
+      - 'tests/test_replay_professional_runner.py'
+      - 'tests/test_replay_validation.py'
       - '.github/workflows/replay-professional-v2.yml'
 
 permissions:
@@ -44,6 +47,9 @@ jobs:
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET }}
         run: python -m engine.replay_professional_runner
+
+      - name: Validate publishable replay artifact
+        run: python -m engine.replay_validation
 
       - name: Assert forward state stayed untouched
         run: |
