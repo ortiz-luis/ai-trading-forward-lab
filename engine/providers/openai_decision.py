@@ -39,13 +39,7 @@ class ResponsesClient(Protocol):
 
 
 class OpenAIDecisionProvider:
-    """OpenAI Responses API adapter for the simulation-only decision contract.
-
-    The provider never reads a key from source files. By default the official
-    SDK reads OPENAI_API_KEY from the environment. Network failures and invalid
-    model outputs are returned as explicit AI_ERROR-style results; they are
-    never converted to NO_TRADE.
-    """
+    """OpenAI Responses API adapter for the simulation-only decision contract."""
 
     name = "openai"
 
@@ -84,11 +78,9 @@ class OpenAIDecisionProvider:
         try:
             response = self._create_response(payload=payload, instructions=instructions)
             parsed = self._parse_response(response)
+            self._validate_sources_against_input(parsed, payload)
             return self._success_result(parsed, response=response, repaired=False)
         except Exception as first_error:
-            # One controlled repair attempt. The second request receives only the
-            # invalid output/error plus the same structured contract; it cannot
-            # silently widen protocol constraints.
             try:
                 repair_payload = {
                     "task": "repair_invalid_structured_output",
@@ -103,6 +95,7 @@ class OpenAIDecisionProvider:
                     ),
                 )
                 parsed = self._parse_response(response)
+                self._validate_sources_against_input(parsed, payload)
                 return self._success_result(parsed, response=response, repaired=True)
             except Exception as repair_error:
                 return DecisionProviderResult(
@@ -147,6 +140,21 @@ class OpenAIDecisionProvider:
         except json.JSONDecodeError as exc:
             raise DecisionProviderError("response output_text is not valid JSON") from exc
         return DecisionOutput.from_dict(raw)
+
+    @staticmethod
+    def _validate_sources_against_input(decision: DecisionOutput, payload: dict[str, Any]) -> None:
+        evidence = payload.get("evidence")
+        if not isinstance(evidence, list):
+            raise DecisionProviderError("input evidence must be a list")
+        allowed = {
+            (row.get("url"), row.get("published_at"))
+            for row in evidence
+            if isinstance(row, dict)
+        }
+        for source in decision.sources:
+            candidate = (source.get("url"), source.get("published_at"))
+            if candidate not in allowed:
+                raise DecisionProviderError("decision referenced evidence not present in supplied context")
 
     def _success_result(self, decision: DecisionOutput, *, response: Any, repaired: bool) -> DecisionProviderResult:
         usage = getattr(response, "usage", None)
