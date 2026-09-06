@@ -197,9 +197,17 @@ class AlpacaMarketDataProvider:
         symbol = self._normalize_symbol(symbol)
         if not 1 <= limit <= 10000:
             raise ValueError("limit must be in [1, 10000]")
+
+        # Alpaca may return an empty latest-bars response outside a live session
+        # when no explicit historical window is supplied. Use a bounded UTC
+        # lookback that safely spans weekends and US market holidays.
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=14)
         params = urlencode(
             {
                 "timeframe": "1Min",
+                "start": start.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                "end": end.isoformat(timespec="seconds").replace("+00:00", "Z"),
                 "limit": str(limit),
                 "adjustment": "raw",
                 "feed": self.feed,
@@ -210,17 +218,17 @@ class AlpacaMarketDataProvider:
         payload = self._request_json(f"{self.data_base_url}/v2/stocks/{symbol}/bars?{params}")
         bars = payload.get("bars")
         if not isinstance(bars, list) or not bars:
-            raise MissingMarketData(f"missing bars for {symbol}")
+            raise MissingMarketData(f"missing bars for {symbol} in 14-day historical window")
         result: list[MarketCandle] = []
         for bar in bars:
             if not isinstance(bar, dict) or not isinstance(bar.get("t"), str):
                 raise MissingMarketData(f"malformed bar for {symbol}")
-            start = datetime.fromisoformat(bar["t"].replace("Z", "+00:00")).astimezone(timezone.utc)
-            end = start + timedelta(minutes=1)
+            start_at = datetime.fromisoformat(bar["t"].replace("Z", "+00:00")).astimezone(timezone.utc)
+            end_at = start_at + timedelta(minutes=1)
             candle = MarketCandle(
                 symbol=symbol,
-                start_at=start.isoformat(timespec="seconds").replace("+00:00", "Z"),
-                end_at=end.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                start_at=start_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+                end_at=end_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
                 open=float(bar["o"]),
                 high=float(bar["h"]),
                 low=float(bar["l"]),
