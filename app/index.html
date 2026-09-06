@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Trading Forward Lab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">AI Trading Forward Lab</p>
+        <h1>¿Qué habría hecho ChatGPT con €1.000 ficticios?</h1>
+        <p class="subtitle">Experimento forward-only. Sin dinero real, sin leverage y sin reescribir decisiones pasadas.</p>
+      </div>
+      <div id="statusPill" class="status-pill">Cargando…</div>
+    </header>
+
+    <section class="hero-grid">
+      <article class="card hero-card">
+        <span class="label">Empezamos con</span>
+        <strong id="startingCapital">€—</strong>
+      </article>
+      <article class="card hero-card primary">
+        <span class="label">Ahora tendríamos</span>
+        <strong id="currentEquity">€—</strong>
+      </article>
+      <article class="card hero-card">
+        <span class="label">Ganancia / pérdida</span>
+        <strong id="totalPnl">€—</strong>
+      </article>
+    </section>
+
+    <section class="card latest-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Última decisión</p>
+          <h2 id="latestTitle">Todavía no hay decisiones</h2>
+        </div>
+        <span id="latestBadge" class="decision-badge neutral">—</span>
+      </div>
+      <p id="latestThesis" class="body-copy">Cuando comience la cohorte oficial, aquí aparecerá la decisión más reciente y su explicación.</p>
+      <div id="latestMeta" class="meta-row"></div>
+    </section>
+
+    <section class="stats-grid">
+      <article class="card mini"><span>Aciertos</span><strong id="wins">0</strong></article>
+      <article class="card mini"><span>Fallos</span><strong id="losses">0</strong></article>
+      <article class="card mini"><span>No hizo nada</span><strong id="noTrades">0</strong></article>
+      <article class="card mini"><span>Decisiones</span><strong id="decisions">0</strong></article>
+    </section>
+
+    <section class="card chart-card">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Capital simulado</p>
+          <h2>Evolución acumulada</h2>
+        </div>
+      </div>
+      <div class="chart-wrap"><svg id="equityChart" viewBox="0 0 800 260" preserveAspectRatio="none" aria-label="Curva de capital"></svg></div>
+    </section>
+
+    <section class="two-col">
+      <article class="card">
+        <div class="section-heading"><div><p class="eyebrow">Mientras no estuviste</p><h2>Últimos movimientos</h2></div></div>
+        <div id="whileAway" class="stack-list empty">Aún no hay historial.</div>
+      </article>
+      <article class="card">
+        <div class="section-heading"><div><p class="eyebrow">Posiciones</p><h2>Abiertas ahora</h2></div></div>
+        <div id="positions" class="stack-list empty">No hay posiciones abiertas.</div>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="section-heading"><div><p class="eyebrow">Historial</p><h2>Decisiones recientes</h2></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Fecha</th><th>Activo</th><th>Decisión</th><th>Resultado</th><th>P/L</th></tr></thead>
+          <tbody id="historyBody"><tr><td colspan="5">Aún no hay decisiones.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <details class="card advanced-card">
+      <summary>Métricas avanzadas</summary>
+      <div id="advanced" class="advanced-grid"></div>
+    </details>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
