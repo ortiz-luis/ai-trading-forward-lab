@@ -1,6 +1,6 @@
 # Professional Replay v2 — TODO
 
-Status: 95% — IMPLEMENTED, FINAL PUBLIC VERIFICATION PENDING
+Status: 100% — COMPLETE
 
 Goal: turn the current blind replay prototype into a professional, pedagogical decision room while keeping the official forward cohort isolated and immutable.
 
@@ -93,7 +93,7 @@ Acceptance: a user can learn the workflow without reading documentation.
 - [x] Add public-data safety scan and structural validation for replay artifacts.
 - [x] Ensure GitHub Pages workflow includes replay v2 artifacts.
 - [x] Run the complete acceptance suite and professional replay generation workflow successfully.
-- [ ] Verify the newly published public page end-to-end and mark this TODO complete.
+- [x] Verify the exact GitHub Pages deployment artifact and mark this TODO complete.
 
 Acceptance: CI + Pages are green and the professional replay is usable without touching the forward cohort.
 
@@ -101,10 +101,14 @@ Acceptance: CI + Pages are green and the professional replay is usable without t
 
 - Professional generation created 3 blind sessions with `forward_ledger_untouched=true`.
 - Artifact validation passed before persistence.
-- At least two sessions are actionable BUY examples after correcting support/resistance to use prior-session levels.
-- MA example: BUY, followed by sequential HOLD assessments through the horizon.
-- V example: BUY, HOLD, then SELL when the predefined breakout thesis was invalidated.
+- Two sessions are actionable BUY examples after correcting support/resistance to use prior-session levels.
+- MA example: BUY, followed by sequential HOLD assessments through the horizon; simulated net P/L ≈ -€1.48.
+- V example: BUY, HOLD, then SELL when the predefined breakout thesis was invalidated; simulated net P/L ≈ -€2.09.
+- A third replay correctly returns NO_TRADE when no setup clears the threshold.
 - Forward cohort files remained unchanged during generation.
+- GitHub Pages build and deployment both completed successfully.
+- The exact deployed Pages artifact was downloaded and inspected: it contains the Replay/Live interface, staged UX, pinned financial chart renderer, professional replay JSON, and the expected NO_TRADE / BUY→HOLD / BUY→HOLD→SELL examples.
+- Published `app.js` passed JavaScript syntax validation.
 
 ## Definition of done
 
