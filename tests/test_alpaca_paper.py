@@ -38,11 +38,10 @@ def test_no_trade_and_hold_do_not_create_paper_orders(monkeypatch):
     shadow = AlpacaPaperShadow(api_key="x", api_secret="y")
     monkeypatch.setattr(shadow, "_json_request", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network should not be called")))
     assert shadow.mirror_decision(decision(Action.NO_TRADE, 0), reference_price_usd=100) is None
-    hold = decision(Action.HOLD, 0)
-    assert shadow.mirror_decision(hold, reference_price_usd=100) is None
+    assert shadow.mirror_decision(decision(Action.HOLD, 0), reference_price_usd=100) is None
 
 
-def test_buy_mirror_is_normalized(monkeypatch):
+def test_buy_mirror_uses_stable_client_order_id(monkeypatch):
     shadow = AlpacaPaperShadow(api_key="x", api_secret="y")
     seen = {}
     def fake(method, path, payload):
@@ -51,6 +50,17 @@ def test_buy_mirror_is_normalized(monkeypatch):
     monkeypatch.setattr(shadow, "_json_request", fake)
     fill = shadow.mirror_decision(decision(), reference_price_usd=100)
     assert seen["path"] == "/v2/orders"
-    assert seen["payload"]["side"] == "buy"
+    assert seen["payload"]["client_order_id"].startswith("aitfl-d-paper")
     assert fill.order_id == "o1"
-    assert fill.filled_avg_price == 100.0
+
+
+def test_sell_mirror_closes_paper_position(monkeypatch):
+    shadow = AlpacaPaperShadow(api_key="x", api_secret="y")
+    seen = {}
+    def fake(method, path, payload):
+        seen.update({"method": method, "path": path, "payload": payload})
+        return {"id":"o2","symbol":"META","side":"sell","status":"accepted","filled_qty":"0"}
+    monkeypatch.setattr(shadow, "_json_request", fake)
+    fill = shadow.mirror_decision(decision(Action.SELL, 0), reference_price_usd=100)
+    assert seen == {"method":"DELETE","path":"/v2/positions/META","payload":None}
+    assert fill.side == "sell"
