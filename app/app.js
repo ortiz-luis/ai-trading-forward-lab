@@ -10,12 +10,22 @@ function drawEquity(series){
   const values=series.map(p=>p.equity_eur);
   const min=Math.min(...values), max=Math.max(...values);
   const span=Math.max(max-min,1);
-  const pts=series.map((p,i)=>{
-    const x=series.length===1?400:(i/(series.length-1))*780+10;
-    const y=240-((p.equity_eur-min)/span)*210;
-    return `${x},${y}`;
-  }).join(' ');
-  svg.innerHTML=`<line x1="10" y1="240" x2="790" y2="240" stroke="currentColor" opacity=".12"/><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/>`;
+  const coords=series.map((p,i)=>({
+    ...p,
+    x:series.length===1?400:(i/(series.length-1))*780+10,
+    y:240-((p.equity_eur-min)/span)*210,
+  }));
+  const pre=coords.filter(p=>p.phase==='PREHISTORY');
+  const fwd=coords.filter(p=>p.phase==='FORWARD');
+  const prePts=pre.map(p=>`${p.x},${p.y}`).join(' ');
+  const joinedFwd=(fwd.length && pre.length ? [pre[pre.length-1],...fwd] : fwd).map(p=>`${p.x},${p.y}`).join(' ');
+  const boundary=fwd.length ? fwd[0].x : null;
+  svg.innerHTML=`
+    <line x1="10" y1="240" x2="790" y2="240" stroke="currentColor" opacity=".12"/>
+    ${pre.length>1?`<polyline points="${prePts}" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="9 9" opacity=".35" vector-effect="non-scaling-stroke"/>`:''}
+    ${joinedFwd?`<polyline points="${joinedFwd}" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/>`:''}
+    ${boundary!==null?`<line x1="${boundary}" y1="18" x2="${boundary}" y2="245" stroke="currentColor" stroke-width="2" stroke-dasharray="4 6" opacity=".45"/><text x="${Math.min(boundary+8,650)}" y="28" fill="currentColor" opacity=".7" font-size="14">Inicio forward</text>`:`<text x="20" y="28" fill="currentColor" opacity=".65" font-size="14">Prehistoria visual · €1.000, sin decisiones</text>`}
+  `;
 }
 
 function render(data){
