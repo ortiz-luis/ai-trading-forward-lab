@@ -2,49 +2,41 @@
 
 GitHub-first, forward-only experiment for observing how an AI manages a **simulated** portfolio over time.
 
-> **Current progress: 5% / 100%**  
-> **Current gate: STOP — waiting for explicit `sigue` before starting 10%.**
+> **Current progress: 10% / 100%**  
+> **Current gate: STOP — waiting for explicit `sigue` before starting 15%.**
 
 ## Product goal
 
-Build a low-friction hobby project where the system can continue running even when the user is absent:
-
-1. A scheduled workflow gathers current market context.
-2. OpenAI receives a fixed, versioned decision protocol.
-3. The model must choose `BUY`, `HOLD`, `SELL`, or `NO_TRADE` within hard portfolio limits.
-4. The decision is timestamped and locked before the outcome is known.
-5. Deterministic code tracks the simulated position and later evaluates the result.
-6. A simple public GitHub Pages dashboard answers: **we started with €1,000; how much would we have now?**
-7. Every win, loss, no-trade day, API failure, and model decision remains visible and auditable.
+Build a low-friction hobby project that continues running when the user is absent. A scheduled workflow gathers market context, OpenAI receives a fixed/versioned protocol, the model chooses `BUY`, `HOLD`, `SELL`, or `NO_TRADE`, the decision is timestamped and locked, deterministic code calculates the simulated portfolio, and a public GitHub Pages dashboard answers: **we started with €1,000; how much would we have now?**
 
 ## Non-negotiable rules
 
 - Phase 1 uses **no real money** and no live-broker credentials.
-- Forward-only. No retroactive rewriting of predictions.
+- Forward-only: no retroactive rewriting of predictions.
 - The AI makes the decision; deterministic code calculates accounting and P&L.
-- `NO_TRADE` is a valid result and must never be treated as a failure.
-- API keys never appear in the browser, repository, Pages artifacts, or logs.
+- `NO_TRADE` is valid and is not a failure.
+- API keys never appear in browser code, repository data, Pages artifacts or logs.
 - GitHub Pages is the public UI; GitHub Actions is the scheduled execution layer.
-- The unattended AI integration uses the OpenAI API, not browser automation of a personal chatgpt.com session.
-- Each experimental cohort freezes its prompt, universe, sizing rules, timing, and evaluation rules before observation #1.
-- Work advances in exact **5% gates**. After each gate, stop until the user explicitly says **`sigue`**.
+- Unattended AI calls use the OpenAI API, not browser automation of chatgpt.com.
+- Each cohort freezes prompt, universe, sizing, timing and evaluation rules before observation #1.
+- Work advances in exact **5% gates** and stops after each gate until the user says **`sigue`**.
 
 ## Target architecture
 
 ```text
 User
   ↓
-GitHub Pages  ← reads generated public data
+GitHub Pages  ← generated public data
   ↑
 GitHub Actions scheduler / manual dispatch
   ↓
-Python decision engine
+Python engine
   ├── Market data adapter
   ├── Context builder
   ├── OpenAI Responses API
   ├── Schema validator
   ├── Portfolio rules
-  ├── Append-only decision ledger
+  ├── Append-only ledger
   └── Deterministic evaluator
               ↓
        Git-versioned state
@@ -56,54 +48,57 @@ Python decision engine
 
 ```text
 /
-├── app/                     # static dashboard frontend
-├── engine/                  # deterministic Python core
+├── app/
+├── engine/
+│   ├── cli.py
+│   ├── commands.py
+│   ├── config.py
 │   ├── decide.py
 │   ├── evaluate.py
 │   ├── portfolio.py
 │   ├── schemas.py
 │   └── providers/
 ├── data/
-│   ├── decisions.jsonl      # immutable decision events
-│   ├── evaluations.jsonl    # outcome events
-│   ├── portfolio.json       # derived/cache state
-│   └── public/              # sanitized data consumed by Pages
-├── prompts/
-│   └── trading_v1.md
+│   ├── decisions.jsonl
+│   ├── evaluations.jsonl
+│   ├── portfolio.json
+│   └── public/
+├── prompts/trading_v1.md
 ├── tests/
 ├── docs/
 ├── .github/workflows/
+├── pyproject.toml
 └── README.md
 ```
 
 # Master implementation plan — 0% → 100%
 
-Each block is an acceptance gate. A block is not marked complete because files exist; its acceptance criteria must pass.
+Each block is an acceptance gate. A block is complete only when its acceptance criteria pass.
 
 ## 0% → 5% — Project control plane and architecture freeze ✅
 
-- [x] Create public repository `ortiz-luis/ai-trading-forward-lab`.
-- [x] Establish this README as the single master TODO/progress board.
-- [x] Freeze the v1 architectural direction: Pages + Actions + Python + OpenAI API + market-data adapter + append-only ledger.
-- [x] Freeze phase-1 safety boundary: simulation only, no live broker credentials.
-- [x] Define exact 5% stop/go working cadence.
-- [x] Add architecture baseline document under `docs/`.
-- [x] Add minimal project skeleton placeholders so subsequent gates have stable locations.
+- [x] Create public repository.
+- [x] Establish README as master TODO/progress board.
+- [x] Freeze Pages + Actions + Python + OpenAI API + market-data adapter + append-only ledger architecture.
+- [x] Freeze simulation-only safety boundary.
+- [x] Define 5% stop/go cadence.
+- [x] Add architecture baseline under `docs/`.
+- [x] Add initial project skeleton.
 
-**Acceptance gate:** another implementation session can determine the goal, architecture, boundaries, next task and stop condition from the repository alone.
+**Acceptance:** another session can recover goal, architecture, boundaries, next task and stop condition from the repo alone.
 
 ---
 
-## 5% → 10% — Executable Python skeleton
+## 5% → 10% — Executable Python skeleton ✅
 
-- [ ] Add `pyproject.toml` with supported Python version and minimal dependencies.
-- [ ] Create importable `engine` package.
-- [ ] Define top-level commands/interfaces for `decide`, `evaluate`, and `rebuild` without external API calls.
-- [ ] Add deterministic configuration loader.
-- [ ] Add first smoke tests.
-- [ ] Add local one-command test entry point suitable for WSL and CI.
+- [x] Add `pyproject.toml` with Python 3.11+ and minimal dependencies.
+- [x] Create importable `engine` package.
+- [x] Define offline top-level interfaces for `decide`, `evaluate`, and `rebuild`.
+- [x] Add deterministic configuration loader.
+- [x] Add smoke tests.
+- [x] Document one-command test entry point for WSL/CI in `docs/LOCAL_DEVELOPMENT.md`.
 
-**Acceptance gate:** fresh clone → one documented command → tests pass with no secrets and no network.
+**Acceptance:** `python -m pytest` passes with no secrets and no network. Local reconstructed acceptance run: **4 passed**. Smoke commands are `python -m engine.cli decide|evaluate|rebuild`.
 
 ---
 
@@ -118,231 +113,231 @@ Each block is an acceptance gate. A block is not marked complete because files e
 - [ ] Implement locked payload hash.
 - [ ] Add tests proving original decisions cannot be silently mutated.
 
-**Acceptance gate:** demo events round-trip, validate, hash, reload and reject illegal mutations.
+**Acceptance:** demo events round-trip, validate, hash, reload and reject illegal mutations.
 
 ---
 
 ## 15% → 20% — Portfolio accounting engine
 
-- [ ] Define starting simulated capital (€1,000 default, configurable).
-- [ ] Implement cash, equity, open positions and realized/unrealized P&L.
-- [ ] Implement BUY/HOLD/SELL/NO_TRADE state transitions.
-- [ ] Enforce no leverage and non-negative cash.
-- [ ] Enforce maximum per-position and total-exposure rules.
+- [ ] Starting simulated capital (€1,000 default/configurable).
+- [ ] Cash, equity, open positions, realized/unrealized P&L.
+- [ ] BUY/HOLD/SELL/NO_TRADE transitions.
+- [ ] No leverage and non-negative cash.
+- [ ] Per-position and total-exposure limits.
 - [ ] Rebuild portfolio entirely from ledger events.
-- [ ] Add accounting invariant tests.
+- [ ] Accounting invariant tests.
 
-**Acceptance gate:** deleting derived `portfolio.json` and rebuilding from events yields bit-for-bit equivalent state.
+**Acceptance:** deleting derived portfolio state and rebuilding from ledger yields equivalent state.
 
 ---
 
 ## 20% → 25% — Market-data provider abstraction
 
 - [ ] Define `MarketDataProvider` interface.
-- [ ] Implement deterministic fixture provider for tests.
-- [ ] Select first official external data provider.
-- [ ] Implement quote/candle timestamp model.
-- [ ] Cache raw observations needed for audit/replay.
-- [ ] Handle missing/stale/closed-market data explicitly.
+- [ ] Deterministic fixture provider.
+- [ ] Select first external provider.
+- [ ] Quote/candle timestamp model.
+- [ ] Cache observations needed for audit/replay.
+- [ ] Explicit missing/stale/closed-market behavior.
 
-**Acceptance gate:** same fixture inputs always produce same normalized market snapshot; stale data cannot create a trade.
+**Acceptance:** fixture input always gives same normalized snapshot and stale data cannot create a trade.
 
 ---
 
 ## 25% → 30% — Real market-data adapter
 
-- [ ] Implement selected provider adapter using secret from environment.
-- [ ] Retrieve quotes for a small allowed universe.
-- [ ] Normalize symbols, timestamps and currencies.
-- [ ] Add retry/rate-limit behavior.
-- [ ] Add provider health status.
-- [ ] Ensure secrets never enter persisted snapshots.
+- [ ] External adapter using environment secret.
+- [ ] Quotes for small allowed universe.
+- [ ] Normalize symbols/timestamps/currencies.
+- [ ] Retry/rate-limit behavior.
+- [ ] Provider health status.
+- [ ] Ensure secrets never persist.
 
-**Acceptance gate:** manual network run produces a sanitized, timestamped market snapshot and clean failure when secret/API is unavailable.
+**Acceptance:** manual network run produces sanitized timestamped snapshot or clean explicit failure.
 
 ---
 
 ## 30% → 35% — Trading protocol v1
 
-- [ ] Freeze initial asset universe.
-- [ ] Freeze long-only / no-leverage phase-1 constraints.
-- [ ] Freeze maximum number of simultaneous positions.
-- [ ] Freeze sizing range and exposure limits.
-- [ ] Freeze horizon and stop semantics.
-- [ ] Freeze entry-price and exit-price rules.
-- [ ] Freeze benchmark (initially SPY unless changed before cohort start).
-- [ ] Define when the correct action is `NO_TRADE`.
+- [ ] Freeze asset universe.
+- [ ] Freeze long-only/no-leverage phase-1 constraints.
+- [ ] Freeze simultaneous-position limit.
+- [ ] Freeze sizing/exposure limits.
+- [ ] Freeze horizon/stop semantics.
+- [ ] Freeze entry/exit price rules.
+- [ ] Freeze benchmark.
+- [ ] Define `NO_TRADE` conditions.
 
-**Acceptance gate:** protocol is precise enough that two deterministic implementations would calculate the same allowed actions and outcomes.
+**Acceptance:** protocol is precise enough for two deterministic implementations to agree on allowed actions/outcomes.
 
 ---
 
 ## 35% → 40% — OpenAI decision contract
 
 - [ ] Create `prompts/trading_v1.md`.
-- [ ] Define strict structured-output JSON schema.
-- [ ] Include portfolio state, cutoff timestamp and market context.
+- [ ] Strict structured-output schema.
+- [ ] Include portfolio, cutoff and market context.
 - [ ] Require thesis, counter-thesis, confidence and sources.
-- [ ] Explicitly prohibit information after cutoff.
+- [ ] Prohibit post-cutoff information.
 - [ ] Make `NO_TRADE` first-class.
-- [ ] Record prompt version and model identifier.
-- [ ] Add fixture responses for every action/error path.
+- [ ] Record prompt/model versions.
+- [ ] Fixtures for every action/error path.
 
-**Acceptance gate:** 100% of fixture outputs either validate exactly or fail closed without creating a decision.
+**Acceptance:** every fixture validates exactly or fails closed.
 
 ---
 
 ## 40% → 45% — OpenAI API integration
 
-- [ ] Add official OpenAI SDK integration behind `DecisionProvider`.
-- [ ] Read API key only from environment/GitHub Secret.
-- [ ] Add timeout and bounded retry.
-- [ ] Add one controlled structured-output repair attempt if needed.
-- [ ] Add explicit `AI_ERROR` state.
-- [ ] Add API cost/usage metadata where available, without storing secrets.
-- [ ] Prevent an API failure from becoming `NO_TRADE`.
+- [ ] Official OpenAI SDK behind `DecisionProvider`.
+- [ ] API key only from environment/GitHub Secret.
+- [ ] Timeout and bounded retry.
+- [ ] One controlled structured-output repair attempt.
+- [ ] Explicit `AI_ERROR`.
+- [ ] Cost/usage metadata where available.
+- [ ] API failure can never become `NO_TRADE`.
 
-**Acceptance gate:** manual invocation returns a schema-valid decision or explicit failure, never ambiguous free text.
+**Acceptance:** invocation returns schema-valid decision or explicit failure, never ambiguous free text.
 
 ---
 
 ## 45% → 50% — Context and evidence pipeline
 
-- [ ] Define evidence object with URL/source/publication time/retrieval time.
-- [ ] Prioritize primary corporate/regulatory sources where practical.
-- [ ] Add bounded recent-news/search context.
-- [ ] Prevent undated/stale evidence from silently appearing current.
-- [ ] Persist a minimal auditable evidence manifest per decision.
-- [ ] Keep context size/cost bounded.
+- [ ] Evidence object: URL/source/publication/retrieval time.
+- [ ] Prioritize primary corporate/regulatory sources.
+- [ ] Bounded recent-news/search context.
+- [ ] Prevent stale evidence appearing current.
+- [ ] Persist auditable evidence manifest.
+- [ ] Bound context size/cost.
 
-**Acceptance gate:** every AI decision can show what evidence was available at its cutoff time.
+**Acceptance:** every decision can show evidence available at cutoff.
 
 ---
 
 ## 50% → 55% — Deterministic evaluator
 
-- [ ] Implement entry execution rule.
-- [ ] Implement stop evaluation.
-- [ ] Implement horizon expiry.
-- [ ] Implement explicit SELL evaluation.
-- [ ] Implement configurable simulated costs/slippage assumptions.
-- [ ] Calculate gross/net P&L.
-- [ ] Calculate benchmark return over identical window.
-- [ ] Create evaluation event without altering decision event.
+- [ ] Entry rule.
+- [ ] Stop evaluation.
+- [ ] Horizon expiry.
+- [ ] Explicit SELL evaluation.
+- [ ] Configurable costs/slippage.
+- [ ] Gross/net P&L.
+- [ ] Benchmark over same window.
+- [ ] Evaluation event without altering decision event.
 
-**Acceptance gate:** known price fixtures yield mathematically verified outcomes for win, loss, stop and expiry cases.
+**Acceptance:** known price fixtures yield verified win/loss/stop/expiry outcomes.
 
 ---
 
 ## 55% → 60% — Scoring and experiment statistics
 
-- [ ] Define human-readable points system.
-- [ ] Track wins/losses/no-trades/errors separately.
-- [ ] Track cumulative simulated equity.
-- [ ] Track return vs benchmark.
-- [ ] Track maximum drawdown.
-- [ ] Track confidence calibration buckets.
-- [ ] Ensure points never substitute for monetary P&L.
+- [ ] Human-readable points system.
+- [ ] Wins/losses/no-trades/errors separately.
+- [ ] Cumulative equity.
+- [ ] Return vs benchmark.
+- [ ] Maximum drawdown.
+- [ ] Confidence calibration buckets.
+- [ ] Points never substitute monetary P&L.
 
-**Acceptance gate:** statistics reproduce exactly from ledger + market observations, with no manually edited totals.
+**Acceptance:** statistics reproduce exactly from ledger + observations.
 
 ---
 
 ## 60% → 65% — GitHub Actions automation core
 
-- [ ] Add daily scheduled workflow.
-- [ ] Add `workflow_dispatch` manual trigger.
-- [ ] Use timezone-aware scheduling and record actual execution timestamp.
-- [ ] Add concurrency guard.
-- [ ] Add per-session/date idempotency.
-- [ ] Run decision, validation, persistence and tests in one controlled pipeline.
-- [ ] Commit only sanitized public/state artifacts.
+- [ ] Daily scheduled workflow.
+- [ ] `workflow_dispatch` manual trigger.
+- [ ] Timezone-aware scheduling and actual timestamp.
+- [ ] Concurrency guard.
+- [ ] Date/session idempotency.
+- [ ] Controlled decision/validation/persistence/tests pipeline.
+- [ ] Commit only sanitized artifacts.
 
-**Acceptance gate:** repeated same-day execution cannot create duplicate decision events.
+**Acceptance:** repeated same-day execution cannot duplicate a decision.
 
 ---
 
 ## 65% → 70% — Evaluation automation and resilience
 
-- [ ] Add periodic evaluator workflow.
-- [ ] Update open positions without requiring user presence.
-- [ ] Add bounded retries for external providers.
-- [ ] Add `DATA_ERROR`, `AI_ERROR`, `DEPLOY_ERROR` events.
-- [ ] Add `health.json`.
-- [ ] Preserve previous public site if a new build fails.
-- [ ] Test several days of synthetic unattended execution.
+- [ ] Periodic evaluator workflow.
+- [ ] Update open positions unattended.
+- [ ] Bounded retries.
+- [ ] `DATA_ERROR`, `AI_ERROR`, `DEPLOY_ERROR` events.
+- [ ] `health.json`.
+- [ ] Preserve prior site on failed build.
+- [ ] Synthetic unattended multi-day test.
 
-**Acceptance gate:** simulated multi-day run survives injected provider/API failures without corrupting state.
+**Acceptance:** injected API/provider failures do not corrupt state.
 
 ---
 
 ## 70% → 75% — Public-data build layer
 
-- [ ] Generate sanitized dashboard JSON from private/runtime state.
-- [ ] Ensure no secret/environment value is serialized.
-- [ ] Generate “while you were away” feed.
-- [ ] Generate current portfolio summary.
-- [ ] Generate historical equity series.
-- [ ] Generate latest decision/result cards.
-- [ ] Add automated secret-pattern scan of publishable artifacts.
+- [ ] Sanitized dashboard JSON.
+- [ ] No environment/secret serialization.
+- [ ] “Mientras no estuviste” feed.
+- [ ] Current portfolio summary.
+- [ ] Historical equity series.
+- [ ] Latest decision/result cards.
+- [ ] Secret-pattern scan.
 
-**Acceptance gate:** public data contains everything UI needs and nothing secret.
+**Acceptance:** public data contains everything UI needs and nothing secret.
 
 ---
 
 ## 75% → 80% — Beginner-first GitHub Pages UI
 
-- [ ] Build responsive home page.
+- [ ] Responsive home page.
 - [ ] Hero: starting money → current simulated money → gain/loss.
-- [ ] Show last AI decision in ordinary language.
-- [ ] Show open positions simply.
-- [ ] Show green/red/neutral history cards.
-- [ ] Show “Mientras no estuviste”.
-- [ ] Show one clear cumulative equity chart.
-- [ ] Keep advanced metrics below/behind secondary view.
+- [ ] Last AI decision in ordinary language.
+- [ ] Simple open positions.
+- [ ] Green/red/neutral history cards.
+- [ ] “Mientras no estuviste”.
+- [ ] One cumulative equity chart.
+- [ ] Advanced metrics secondary.
 
-**Acceptance gate:** a first-time user can explain what happened in under 10 seconds without reading documentation.
+**Acceptance:** first-time user understands what happened in under 10 seconds.
 
 ---
 
 ## 80% → 85% — Pages deployment and manual interaction
 
-- [ ] Add official GitHub Pages deployment workflow.
-- [ ] Configure base path correctly for project Pages.
-- [ ] Add manual “request a decision now” path through authorized GitHub workflow, not a public API-key endpoint.
-- [ ] Surface last system update and health status in UI.
-- [ ] Validate mobile/desktop rendering.
-- [ ] Validate HTTPS/public access behavior.
+- [ ] Official Pages deployment workflow.
+- [ ] Correct project Pages base path.
+- [ ] Authorized manual “request a decision now” path.
+- [ ] Last update and health status in UI.
+- [ ] Mobile/desktop validation.
+- [ ] HTTPS/public-access validation.
 
-**Acceptance gate:** main branch produces a working public site; manual execution is possible without exposing credentials.
+**Acceptance:** main branch deploys working public site and manual execution exposes no credentials.
 
 ---
 
 ## 85% → 90% — Optional Alpaca Paper shadow execution
 
-- [ ] Create adapter boundary for paper broker.
-- [ ] Support Alpaca **paper-only** credentials.
-- [ ] Mirror eligible simulated orders to paper environment.
-- [ ] Reconcile internal theoretical fills vs paper fills.
-- [ ] Display differences instead of overwriting internal ledger.
-- [ ] Hard-block live endpoint/credentials in phase 1.
+- [ ] Paper-broker adapter boundary.
+- [ ] Alpaca paper-only credentials.
+- [ ] Mirror eligible simulated orders.
+- [ ] Reconcile internal theoretical vs paper fills.
+- [ ] Display discrepancies without overwriting internal ledger.
+- [ ] Hard-block live endpoint/credentials.
 
-**Acceptance gate:** paper broker can be disabled entirely; when enabled, discrepancies are visible and internal truth remains reproducible.
+**Acceptance:** paper broker is optional and internal truth remains reproducible.
 
 ---
 
 ## 90% → 95% — Hardening and experiment freeze
 
-- [ ] Run secret scan across repo and built site.
-- [ ] Run failure-injection suite.
-- [ ] Run rebuild-from-zero test.
-- [ ] Run duplicate-schedule test.
-- [ ] Check dependency/update policy.
-- [ ] Document recovery procedure.
+- [ ] Secret scan across repo/site.
+- [ ] Failure-injection suite.
+- [ ] Rebuild-from-zero test.
+- [ ] Duplicate-schedule test.
+- [ ] Dependency/update policy.
+- [ ] Recovery procedure.
 - [ ] Freeze prompt/protocol/provider/model cohort configuration.
 - [ ] Create pre-experiment tag/checkpoint.
 
-**Acceptance gate:** no known path silently edits history, spends unbounded API budget, exposes keys, or creates trades from missing data.
+**Acceptance:** no known path silently edits history, exposes keys, spends unbounded API budget or creates trades from missing data.
 
 ---
 
@@ -350,30 +345,30 @@ Each block is an acceptance gate. A block is not marked complete because files e
 
 - [ ] Initialize official simulated €1,000 cohort.
 - [ ] Generate observation #1 prospectively.
-- [ ] Verify its timestamp/evidence/hash in repository.
-- [ ] Verify dashboard displays it correctly.
-- [ ] Verify evaluator can follow it unattended.
-- [ ] Document cohort start date and frozen configuration.
-- [ ] Declare v1 live in **simulation-only** mode.
+- [ ] Verify timestamp/evidence/hash.
+- [ ] Verify dashboard display.
+- [ ] Verify unattended evaluator.
+- [ ] Document start date/frozen configuration.
+- [ ] Declare v1 live in simulation-only mode.
 
-**Acceptance gate:** the experiment can continue for days without the user and return an honest, auditable answer to “what would ChatGPT have done, and how much would we have now?”
+**Acceptance:** the experiment can run for days without the user and honestly answer “what would ChatGPT have done, and how much would we have now?”
 
 ---
 
-# Future gate: real money — explicitly outside this 0–100 plan
+# Future gate: real money — outside this 0–100 plan
 
-No automatic promotion to live trading exists. A separate design review is required after a sufficiently informative forward-simulation cohort. Paper results do not guarantee live results because real execution adds slippage, latency, market impact, liquidity constraints and behavioral effects.
+No automatic promotion to live trading. A separate design review is required after a sufficiently informative forward-simulation cohort.
 
 ## Working protocol for future chats
 
 1. Read this README and current repository state first.
-2. Identify the current completed percentage.
+2. Identify the completed percentage.
 3. Execute only the next 5% block.
 4. Run its acceptance checks.
-5. Update this README and mark only genuinely completed items.
-6. Commit the checkpoint.
-7. **STOP.** Do not begin the following block until the user says `sigue`.
+5. Update README and mark only genuinely completed items.
+6. Commit checkpoint.
+7. **STOP** until the user says `sigue`.
 
 ## Current checkpoint
 
-**5% complete.** Project architecture and execution order are frozen. Next block is **5% → 10%: Executable Python skeleton**.
+**10% complete.** Executable offline Python skeleton is in place and smoke-tested. Next block is **10% → 15%: Event schemas and immutable ledger**.
