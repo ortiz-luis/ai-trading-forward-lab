@@ -39,11 +39,13 @@ jobs:
       - name: Assemble Pages artifact
         run: |
           rm -rf _site
-          mkdir -p _site/data/replay
+          mkdir -p _site/data
           cp app/index.html app/styles.css app/app.js _site/
           cp data/public/dashboard.json _site/data/dashboard.json
-          if [ -f data/replay/index.json ]; then
-            cp data/replay/index.json _site/data/replay/index.json
+          if [ -f data/replay_v2/index.json ]; then
+            cp data/replay_v2/index.json _site/data/replay-v2.json
+          else
+            printf '{"version":"professional-v2","replay_count":0,"sessions":[]}\n' > _site/data/replay-v2.json
           fi
       - uses: actions/configure-pages@v5
         with:
