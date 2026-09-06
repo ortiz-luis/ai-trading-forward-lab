@@ -69,7 +69,6 @@ class AlpacaPaperShadow:
         if decision.action == Action.BUY:
             if decision.notional_eur <= 0:
                 raise PaperShadowError("BUY requires positive simulated notional")
-            # Paper shadow uses a fractional share estimate only for mirroring.
             qty = decision.notional_eur / reference_price_usd
             payload = {
                 "symbol": decision.symbol,
@@ -77,20 +76,16 @@ class AlpacaPaperShadow:
                 "side": "buy",
                 "type": "market",
                 "time_in_force": "day",
+                "client_order_id": f"aitfl-{decision.decision_id}"[:48],
             }
-        elif decision.action == Action.SELL:
-            payload = {
-                "symbol": decision.symbol,
-                "side": "sell",
-                "type": "market",
-                "time_in_force": "day",
-                "position_intent": "sell_to_close",
-            }
-        else:
-            raise PaperShadowError(f"unsupported action {decision.action}")
+            raw = self._json_request("POST", "/v2/orders", payload)
+            return self._normalize_fill(raw, symbol=decision.symbol, side="buy")
 
-        raw = self._json_request("POST", "/v2/orders", payload)
-        return self._normalize_fill(raw, symbol=decision.symbol, side=payload["side"])
+        if decision.action == Action.SELL:
+            raw = self._json_request("DELETE", f"/v2/positions/{decision.symbol}", None)
+            return self._normalize_fill(raw, symbol=decision.symbol, side="sell")
+
+        raise PaperShadowError(f"unsupported action {decision.action}")
 
     def reconcile_order(self, order_id: str) -> PaperFill:
         if not order_id.strip():
