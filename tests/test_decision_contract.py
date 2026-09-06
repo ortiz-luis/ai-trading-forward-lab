@@ -2,7 +2,7 @@ import pytest
 
 from engine.decision_contract import DecisionInput, DecisionOutput, build_prompt_input
 from engine.schemas import Action
-from engine.trading_protocol import PROTOCOL_V1
+from engine.protocol import PROTOCOL_V1
 
 
 def valid_buy_payload():
@@ -34,8 +34,19 @@ def test_no_trade_contract():
         "horizon_days": 0,
         "stop_pct": None,
     })
-    out = DecisionOutput.from_dict(payload)
-    assert out.action == Action.NO_TRADE
+    assert DecisionOutput.from_dict(payload).action == Action.NO_TRADE
+
+
+@pytest.mark.parametrize("action", ["HOLD", "SELL"])
+def test_hold_and_sell_contracts(action):
+    payload = valid_buy_payload()
+    payload.update({
+        "action": action,
+        "notional_eur": 0,
+        "horizon_days": 0,
+        "stop_pct": None,
+    })
+    assert DecisionOutput.from_dict(payload).action.value == action
 
 
 def test_extra_field_fails_closed():
@@ -59,14 +70,16 @@ def test_invalid_stop_fails_protocol():
         DecisionOutput.from_dict(payload)
 
 
-def test_prompt_input_contains_cutoff_portfolio_and_context():
+def test_prompt_input_contains_cutoff_portfolio_context_and_versions():
     payload = build_prompt_input(DecisionInput(
         cutoff_at="2026-09-06T14:00:00Z",
         portfolio={"cash_eur": 1000},
         protocol={"version": PROTOCOL_V1.version},
         market={"META": {"price": 100}},
         evidence=[{"url": "https://example.com", "published_at": "2026-09-06T12:00:00Z"}],
+        model_identifier="fixture-model",
     ))
     assert payload["cutoff_at"] == "2026-09-06T14:00:00Z"
     assert payload["portfolio"]["cash_eur"] == 1000
     assert payload["prompt_version"] == "trading-v1"
+    assert payload["model_identifier"] == "fixture-model"
