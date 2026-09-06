@@ -52,7 +52,7 @@ jobs:
 
       - name: Persist replay-only artifact
         run: |
-          if git diff --quiet -- data/replay/; then
+          if [ -z "$(git status --porcelain -- data/replay/)" ]; then
             echo 'Replay artifact unchanged.'
             exit 0
           fi
