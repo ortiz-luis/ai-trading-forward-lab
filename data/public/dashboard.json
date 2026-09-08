@@ -15,61 +15,61 @@
   "current_equity_eur": 1000.0,
   "equity_series": [
     {
-      "at": "2026-08-24T20:00:00Z",
+      "at": "2026-08-25T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 0,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-08-25T20:00:00Z",
+      "at": "2026-08-26T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 1,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-08-26T20:00:00Z",
+      "at": "2026-08-27T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 2,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-08-27T20:00:00Z",
+      "at": "2026-08-28T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 3,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-08-28T20:00:00Z",
+      "at": "2026-08-31T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 4,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-08-31T20:00:00Z",
+      "at": "2026-09-01T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 5,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-09-01T20:00:00Z",
+      "at": "2026-09-02T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 6,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-09-02T20:00:00Z",
+      "at": "2026-09-03T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 7,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-09-03T20:00:00Z",
+      "at": "2026-09-04T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 8,
       "phase": "PREHISTORY"
     },
     {
-      "at": "2026-09-04T20:00:00Z",
+      "at": "2026-09-07T20:00:00Z",
       "equity_eur": 1000.0,
       "index": 9,
       "phase": "PREHISTORY"
